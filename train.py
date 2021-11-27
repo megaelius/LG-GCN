@@ -1,5 +1,4 @@
 
-import __init__
 import os
 
 #os.environ['LD_LIBRARY_PATH'] += ':/usr/local/cuda-11.1/bin64:/usr/local/cuda-11.2/bin64'
@@ -22,7 +21,7 @@ from parallel_wrapper import launch
 import comm
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter(log_dir='log/mlp4')
+writer = SummaryWriter(log_dir='log/mlpdensedrop')
 
 def train(model, train_loader, optimizer, criterion, opt, cur_rank):
     opt.losses.reset()

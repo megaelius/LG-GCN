@@ -27,3 +27,4 @@ examples/part_sem_seg/result/
 examples/part_sem_seg/script/
 
 weights/
+log/

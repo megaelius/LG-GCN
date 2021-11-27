@@ -70,6 +70,7 @@ class CustomDenseDeepGCN(torch.nn.Module):
         self.knn_criterion = opt.knn_criterion
         if self.knn_criterion == 'MLP':
             #self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,opt.in_channels))
+            '''
             self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,27),
                                                  torch.nn.ReLU(),
                                                  torch.nn.Linear(27,27),
@@ -77,9 +78,14 @@ class CustomDenseDeepGCN(torch.nn.Module):
                                                  torch.nn.Linear(27,9),
                                                  torch.nn.ReLU(),
                                                  torch.nn.Linear(9,opt.in_channels))
-        self.head = GraphConv2d(opt.in_channels, channels, conv, act, norm, bias)
+            '''
+            self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,32),
+                                                 torch.nn.ReLU(),
+                                                 torch.nn.Dropout(0.5),
+                                                 torch.nn.Linear(32,opt.in_channels),
+                                                 torch.nn.Dropout(0.5))
+        self.head = GraphConv2d(2*opt.in_channels, channels, conv, act, norm, bias)
         self.knn = DenseKnnGraph(k)
-        
 
         if opt.block.lower() == 'res':
             self.backbone = Seq(*[ResBlock2d(channels, conv, act, norm, bias)
@@ -111,7 +117,8 @@ class CustomDenseDeepGCN(torch.nn.Module):
             #inputs shape is B,9,N_points,1
             #inputs = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
             mlp_features, edge_index = self.knn(self.graph_mlp(inputs.transpose(3,1)).transpose(3,1))
-        feats = [self.head(mlp_features, edge_index)]
+            inputs = torch.cat((mlp_features,inputs),dim=1)
+        feats = [self.head(inputs, edge_index)]
         for i in range(self.n_blocks-1):
             feats.append(self.backbone[i](feats[-1], edge_index))
         feats = torch.cat(feats, dim=1)
