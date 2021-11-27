@@ -272,4 +272,3 @@ def visualize_part_seg(file_name_pred, file_name_gt, comparison_folder_list, lim
     print(np.asarray(all_points).shape)
     show_pointclouds(all_points, all_colors, text=text, png_path=png_path, interactive=interactive,
                      orientation=orientation)
-

@@ -2,7 +2,7 @@
 import __init__
 import os
 
-#os.environ['LD_LIBRARY_PATH'] += ':/usr/local/cuda-11.1/bin64:/usr/local/cuda-11.2/bin64' 
+#os.environ['LD_LIBRARY_PATH'] += ':/usr/local/cuda-11.1/bin64:/usr/local/cuda-11.2/bin64'
 
 import numpy as np
 import torch
@@ -75,7 +75,7 @@ def test(model, loader, opt, cur_rank):
     ious = np.divide(np.sum(Is, 0), np.sum(Us, 0))
     ious[np.isnan(ious)] = 1
     iou = np.mean(ious)
-    
+
     if opt.phase == 'test':
         for cl in range(opt.n_classes):
             logging.info("===> mIOU for class {}: {}".format(cl, ious[cl]))
@@ -166,6 +166,6 @@ def main():
         args=(opt,)
     )
     #epochs(opt)
-    
+
 if __name__ == '__main__':
     main()
