@@ -63,6 +63,7 @@ class CustomDenseDeepGCN(torch.nn.Module):
         act = opt.act
         norm = opt.norm
         bias = opt.bias
+        self.dropout = opt.dropout
         epsilon = opt.epsilon
         conv = opt.conv
         c_growth = channels
@@ -81,9 +82,9 @@ class CustomDenseDeepGCN(torch.nn.Module):
             '''
             self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,32),
                                                  torch.nn.ReLU(),
-                                                 torch.nn.Dropout(0.5),
+                                                 torch.nn.Dropout(self.dropout),
                                                  torch.nn.Linear(32,opt.in_channels),
-                                                 torch.nn.Dropout(0.5))
+                                                 torch.nn.Dropout(self.dropout))
         self.head = GraphConv2d(2*opt.in_channels, channels, conv, act, norm, bias)
         self.knn = DenseKnnGraph(k)
 

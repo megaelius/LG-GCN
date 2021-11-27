@@ -45,6 +45,7 @@ class OptInit:
                             help='evaluation frequency of training (default: 1). Set as -1 to disable evaluation')
         parser.add_argument('--n_gpus', type=int, help='Number of GPUs')
         parser.add_argument('--seed', type=int, default=0, help='random seed')
+        parser.add_argument('--dropout_mlp', type=float, default=0, help='dropout probability')
 
         # ----------------- Testing related
         parser.add_argument('--no_clutter', action='store_true', help='no clutter? set --no_clutter if ture.')
