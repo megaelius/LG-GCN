@@ -1,6 +1,7 @@
 import h5py
 import torch
 from utils.pc_viz import show_pointclouds
+from architecture import CustomDenseDeepGCN
 
 import vtk
 from numpy import random
@@ -15,8 +16,6 @@ class VtkPointCloud:
         self.colors = vtk.vtkUnsignedCharArray()
         self.colors.SetNumberOfComponents(3)
         self.colors.SetName("Colors")
-
-        self.lines = vtk.vtkCellArray()
 
         self.clearPoints()
         mapper = vtk.vtkPolyDataMapper()
@@ -34,6 +33,7 @@ class VtkPointCloud:
             self.vtkDepth.InsertNextValue(point[2])
             self.vtkCells.InsertNextCell(1)
             self.vtkCells.InsertCellPoint(pointId)
+            self.vtkActor.GetProperty().SetPointSize(4)
         else:
             r = random.randint(0, self.maxNumPoints)
             self.vtkPoints.SetPoint(r, point[:])
@@ -42,26 +42,47 @@ class VtkPointCloud:
         self.vtkPoints.Modified()
         self.vtkDepth.Modified()
 
+    def addLine(self, id1, id2):
+        self.vtkLines.InsertNextCell(2, [id1, id2])
 
     def clearPoints(self):
         self.vtkPoints = vtk.vtkPoints()
         self.vtkCells = vtk.vtkCellArray()
+        self.vtkLines = vtk.vtkCellArray()
         self.vtkDepth = vtk.vtkDoubleArray()
         self.vtkDepth.SetName('DepthArray')
         self.vtkPolyData.SetPoints(self.vtkPoints)
         self.vtkPolyData.SetVerts(self.vtkCells)
+        self.vtkPolyData.SetLines(self.vtkLines)
         self.vtkPolyData.GetPointData().SetScalars(self.vtkDepth)
         self.vtkPolyData.GetPointData().SetActiveScalars('DepthArray')
+
+def dense_knn_to_set(knn_index):
+    edges = set()
+    for i in range(knn_index.shape[2]):
+        for j in range(knn_index.shape[3]):
+            l = list(knn_index[:,:,i,j])
+            tuple = (int(l[0]),int(l[1]))
+            edges.add(tuple)
+    return edges
 
 if __name__ == '__main__':
     filename = "data/ply_data_all_0.h5"
 
-    model = torch.load('mlp3_best.pth',map_location='cpu')
-    print(model['state_dict']['module.graph_mlp.0.weight'], model['state_dict']['module.graph_mlp.0.bias'])
+    checkpoint2 = torch.load('weights/mlp2_best.pth',map_location='cpu')
+    checkpoint3 = torch.load('weights/mlp3_best.pth',map_location='cpu')
 
-    mlp = torch.nn.Linear(9,9)
-    mlp.weight.data = model['state_dict']['module.graph_mlp.0.weight']
-    mlp.bias.data = model['state_dict']['module.graph_mlp.0.bias']
+    mlp3 = torch.nn.Linear(9,9)
+    mlp3.weight.data = checkpoint3['state_dict']['module.graph_mlp.0.weight']
+    mlp3.bias.data = checkpoint3['state_dict']['module.graph_mlp.0.bias']
+
+    mlp2 = torch.nn.Sequential(torch.nn.Linear(9,32),
+                              torch.nn.ReLU(),
+                              torch.nn.Linear(32,9))
+    mlp2[0].weight.data = checkpoint2['state_dict']['module.graph_mlp.0.weight']
+    mlp2[0].bias.data = checkpoint2['state_dict']['module.graph_mlp.0.bias']
+    mlp2[2].weight.data = checkpoint2['state_dict']['module.graph_mlp.2.weight']
+    mlp2[2].bias.data = checkpoint2['state_dict']['module.graph_mlp.2.bias']
 
     knn = DenseKnnGraph(16)
 
@@ -72,22 +93,24 @@ if __name__ == '__main__':
 
         # Get the data
         data = torch.Tensor(f[a_group_key])
-        print(data.shape)
-        print(data[0,0,:])
-        print(mlp(data[0,0,:]))
-        print(data[0,:,:3].numpy().shape)
-        print(data[0,:,:3].unsqueeze(0).unsqueeze(-1).transpose(2,1).shape)
-
-        #data2, knn_index = knn(data[0,:,:3].unsqueeze(-1).transpose(2,1))
-        #print(knn_index.shape)
         pointCloud = VtkPointCloud()
+
+        #Add points
         for j in range(data.shape[1]):
-            pointCloud.addPoint(list(data[0,j,0:3]),list(255*data[0,j,3:6]))
-            #pointCloud.addPoint(list(data[999,j,0:3]),list(255*data[999,j,3:6]))
-        pointCloud.addPoint([0,0,0],[0,0,0])
-        pointCloud.addPoint([0,0,0],[0,0,0])
-        pointCloud.addPoint([0,0,0],[0,0,0])
-        pointCloud.addPoint([0,0,0],[0,0,0])
+            pointCloud.addPoint(list(data[1,j,0:3]),list(255*data[1,j,3:6]))
+        #Add graph lines
+        #(batch_size, num_dims, num_points, 1)
+        _, knn_index = knn(data[1,:,:].unsqueeze(0).unsqueeze(-1).transpose(2,1))
+        _, knn_index_mlp2 = knn(mlp2(data[1,:,:]).unsqueeze(0).unsqueeze(-1).transpose(2,1))
+        _, knn_index_mlp3 = knn(mlp3(data[1,:,:]).unsqueeze(0).unsqueeze(-1).transpose(2,1))
+        edges = dense_knn_to_set(knn_index)
+        edges_mlp2 = dense_knn_to_set(knn_index_mlp2)
+        edges_mlp3 = dense_knn_to_set(knn_index_mlp3)
+        diff1 = edges.difference(edges_mlp2)
+        diff2 = edges_mlp2.difference(edges)
+        diff3 = edges_mlp2.difference(edges_mlp3)
+        for edge in diff3:
+            pointCloud.addLine(edge[0],edge[1])
 
         # Renderer
         renderer = vtk.vtkRenderer()
