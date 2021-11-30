@@ -21,7 +21,7 @@ from parallel_wrapper import launch
 import comm
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter(log_dir='log/mlpdensedrop')
+writer = SummaryWriter(log_dir='log/mlpdense_big_lr')
 
 def train(model, train_loader, optimizer, criterion, opt, cur_rank):
     opt.losses.reset()
@@ -121,7 +121,7 @@ def epochs(opt):
         train(model, train_loader, optimizer, criterion, opt, cur_rank)
         if opt.epoch % opt.eval_freq == 0 and opt.eval_freq != -1:
             test(model, test_loader, opt, cur_rank)
-        scheduler.step()
+        #scheduler.step()
         if comm.is_main_process():
             # ------------------ save checkpoints
             # min or max. based on the metrics

@@ -41,6 +41,17 @@ def pairwise_distance(x):
     x_square = torch.sum(torch.mul(x, x), dim=-1, keepdim=True)
     return x_square + x_inner + x_square.transpose(2, 1)
 
+def pairwise_similarity(x):
+    """
+    Compute pairwise similarity of a point cloud.
+    Args:
+        x: tensor (batch_size, num_points, num_dims)
+    Returns:
+        pairwise distance: (batch_size, num_points, num_points)
+    """
+    x_inner = torch.matmul(x, x.transpose(2, 1))
+    return x_inner
+
 
 def dense_knn_matrix(x, k=16):
     """Get KNN based on the pairwise distance.
@@ -50,12 +61,26 @@ def dense_knn_matrix(x, k=16):
     Returns:
         nearest neighbors: (batch_size, num_points ,k) (batch_size, num_points, k)
     """
+    with torch.no_grad():
+        x = x.transpose(2, 1).squeeze(-1)
+        batch_size, n_points, n_dims = x.shape
+        _, nn_idx = torch.topk(-pairwise_distance(x.detach()), k=k)
+        center_idx = torch.arange(0, n_points, device=x.device).repeat(batch_size, k, 1).transpose(2, 1)
+        return torch.stack((nn_idx, center_idx), dim=0)
+
+def dense_sim_matrix(x, k = 16):
+    """Get graph based on top k most similar points
+    Args:
+        x: (batch_size, num_dims, num_points, 1)
+        k: int
+    Returns:
+        graph: (batch_size, num_points ,k) (batch_size, num_points, k)
+    """
     x = x.transpose(2, 1).squeeze(-1)
     batch_size, n_points, n_dims = x.shape
-    _, nn_idx = torch.topk(-pairwise_distance(x.detach()), k=k)
+    sims, nn_idx = torch.topk(pairwise_similarity(x.detach()), k=k)
     center_idx = torch.arange(0, n_points, device=x.device).repeat(batch_size, k, 1).transpose(2, 1)
-    return torch.stack((nn_idx, center_idx), dim=0)
-
+    return sims, torch.stack((nn_idx, center_idx), dim=0)
 
 class DenseDilatedKnnGraph(nn.Module):
     """
@@ -110,4 +135,17 @@ class DenseKnnGraph(nn.Module):
 
     def forward(self, x):
         edge_index = self.knn(x, self.k)
-        return x,edge_index
+        return edge_index
+
+class SimGraph(nn.Module):
+    """
+    Find the neighbors' indices based on thresholded similarity
+    """
+    def __init__(self, k=16):
+        super(SimGraph, self).__init__()
+        self.k = k
+        self.graph = dense_sim_matrix
+
+    def forward(self, x):
+        similarities, edge_index = self.graph(x, self.k)
+        return similarities,edge_index

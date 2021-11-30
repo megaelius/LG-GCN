@@ -45,14 +45,13 @@ class OptInit:
                             help='evaluation frequency of training (default: 1). Set as -1 to disable evaluation')
         parser.add_argument('--n_gpus', type=int, help='Number of GPUs')
         parser.add_argument('--seed', type=int, default=0, help='random seed')
-        parser.add_argument('--dropout_mlp', type=float, default=0, help='dropout probability')
 
         # ----------------- Testing related
         parser.add_argument('--no_clutter', action='store_true', help='no clutter? set --no_clutter if ture.')
         parser.add_argument('--pretrained_model', type=str, help='path to pretrained model(default: none)', default='')
 
         # ----------------- Model related
-
+        parser.add_argument('--graph', default='KNN', type=str, help='graph creation method')
         parser.add_argument('--k', default=16, type=int, help='neighbor num (default:16)')
         parser.add_argument('--knn_criterion', default='xyz', type=str, help='xyz, color or MLP(TODO)')
         parser.add_argument('--block', default='plain', type=str, help='graph backbone block type {plain, res, dense}')

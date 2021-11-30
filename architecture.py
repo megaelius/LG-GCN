@@ -1,6 +1,6 @@
 import torch
 from torch.nn.modules.activation import ReLU
-from gcn_lib.dense import BasicConv, GraphConv2d, PlainDynBlock2d, ResDynBlock2d, DenseDynBlock2d, DenseDilatedKnnGraph, DenseKnnGraph, PlainBlock2d, ResBlock2d, DenseBlock2d
+from gcn_lib.dense import BasicConv, GraphConv2d, PlainDynBlock2d, ResDynBlock2d, DenseDynBlock2d, DenseDilatedKnnGraph, DenseKnnGraph, PlainBlock2d, ResBlock2d, DenseBlock2d, SimGraph
 from torch.nn import Sequential as Seq
 
 
@@ -68,25 +68,28 @@ class CustomDenseDeepGCN(torch.nn.Module):
         conv = opt.conv
         c_growth = channels
         self.n_blocks = opt.n_blocks
+        self.graph = opt.graph
         self.knn_criterion = opt.knn_criterion
-        if self.knn_criterion == 'MLP':
+        if self.knn_criterion == 'MLP' or self.graph == 'sim':
             #self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,opt.in_channels))
             '''
             self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,27),
-                                                 torch.nn.ReLU(),
-                                                 torch.nn.Linear(27,27),
-                                                 torch.nn.ReLU(),
-                                                 torch.nn.Linear(27,9),
-                                                 torch.nn.ReLU(),
-                                                 torch.nn.Linear(9,opt.in_channels))
+                                                torch.nn.ReLU(),
+                                                torch.nn.Linear(27,27),
+                                                torch.nn.ReLU(),
+                                                torch.nn.Linear(27,9),
+                                                torch.nn.ReLU(),
+                                                torch.nn.Linear(9,opt.in_channels))
             '''
             self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,32),
-                                                 torch.nn.ReLU(),
-                                                 torch.nn.Dropout(self.dropout),
-                                                 torch.nn.Linear(32,opt.in_channels),
-                                                 torch.nn.Dropout(self.dropout))
+                                                torch.nn.ReLU(),
+                                                torch.nn.Dropout(self.dropout),
+                                                torch.nn.Linear(32,opt.in_channels),
+                                                torch.nn.Dropout(self.dropout))
+            
         self.head = GraphConv2d(2*opt.in_channels, channels, conv, act, norm, bias)
         self.knn = DenseKnnGraph(k)
+        self.similarity_graph = SimGraph(k)
 
         if opt.block.lower() == 'res':
             self.backbone = Seq(*[ResBlock2d(channels, conv, act, norm, bias)
@@ -110,14 +113,21 @@ class CustomDenseDeepGCN(torch.nn.Module):
                                 BasicConv([256, opt.n_classes], None, None, bias)])
 
     def forward(self, inputs):
-        if self.knn_criterion == 'xyz':
-            inputs, edge_index = self.knn(inputs[:, 0:3])
-        elif self.knn_criterion == 'color':
-            inputs, edge_index = self.knn(inputs[:, 3:6])
-        elif self.knn_criterion == 'MLP':
-            #inputs shape is B,9,N_points,1
-            #inputs = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
-            mlp_features, edge_index = self.knn(self.graph_mlp(inputs.transpose(3,1)).transpose(3,1))
+        if self.graph == 'KNN':
+            if self.knn_criterion == 'xyz':
+                inputs, edge_index = self.knn(inputs[:, 0:3])
+            elif self.knn_criterion == 'color':
+                inputs, edge_index = self.knn(inputs[:, 3:6])
+            elif self.knn_criterion == 'MLP':
+                #inputs shape is B,9,N_points,1
+                #inputs = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
+                mlp_features = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
+                edge_index = self.knn(mlp_features)
+                inputs = torch.cat((mlp_features,inputs),dim=1)
+        else:
+            mlp_features = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
+            similarities, edge_index = self.similarity_graph(mlp_features)
+            #print(inputs.shape, similarities.shape)
             inputs = torch.cat((mlp_features,inputs),dim=1)
         feats = [self.head(inputs, edge_index)]
         for i in range(self.n_blocks-1):
