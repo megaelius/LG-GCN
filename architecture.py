@@ -86,8 +86,9 @@ class CustomDenseDeepGCN(torch.nn.Module):
                                                 torch.nn.Dropout(self.dropout),
                                                 torch.nn.Linear(32,opt.in_channels),
                                                 torch.nn.Dropout(self.dropout))
-            
-        self.head = GraphConv2d(2*opt.in_channels, channels, conv, act, norm, bias)
+            self.head = GraphConv2d(2*opt.in_channels, channels, conv, act, norm, bias)
+        else:
+            self.head = GraphConv2d(opt.in_channels, channels, conv, act, norm, bias)
         self.knn = DenseKnnGraph(k)
         self.similarity_graph = SimGraph(k)
 
@@ -115,9 +116,11 @@ class CustomDenseDeepGCN(torch.nn.Module):
     def forward(self, inputs):
         if self.graph == 'KNN':
             if self.knn_criterion == 'xyz':
-                inputs, edge_index = self.knn(inputs[:, 0:3])
+                edge_index = self.knn(inputs[:, 0:3])
+            elif self.knn_criterion == 'all':
+                edge_index = self.knn(inputs)
             elif self.knn_criterion == 'color':
-                inputs, edge_index = self.knn(inputs[:, 3:6])
+                edge_index = self.knn(inputs[:, 3:6])
             elif self.knn_criterion == 'MLP':
                 #inputs shape is B,9,N_points,1
                 #inputs = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
