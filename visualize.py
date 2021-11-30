@@ -69,7 +69,7 @@ def dense_knn_to_set(knn_index):
 if __name__ == '__main__':
     filename = "data/ply_data_all_0.h5"
 
-    checkpoint2 = torch.load('weights/mlp2_best.pth',map_location='cpu')
+    checkpoint2 = torch.load('weights/mlpdense_best.pth',map_location='cpu')
     checkpoint3 = torch.load('weights/mlp3_best.pth',map_location='cpu')
 
     mlp3 = torch.nn.Linear(9,9)
@@ -109,7 +109,7 @@ if __name__ == '__main__':
         diff1 = edges.difference(edges_mlp2)
         diff2 = edges_mlp2.difference(edges)
         diff3 = edges_mlp2.difference(edges_mlp3)
-        for edge in diff3:
+        for edge in edges_mlp2:
             pointCloud.addLine(edge[0],edge[1])
 
         # Renderer
