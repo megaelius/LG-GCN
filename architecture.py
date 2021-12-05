@@ -97,37 +97,45 @@ class CustomDenseDeepGCN(torch.nn.Module):
         fusion = torch.repeat_interleave(fusion, repeats=feats.shape[2], dim=2)
         return self.prediction(torch.cat((fusion, feats), dim=1)).squeeze(-1)
 
-class MessagePassing(nn.Module):
+class MessagePassing(torch.nn.Module):
     """
     Graph convolution adapted from Kearnes et al. (2016), https://arxiv.org/abs/1603.00856
     """
-    def __init__(self, in_channels, m_channels, out_channels):
+    def __init__(self, in_node, in_edge, m_channels, out_channels):
         super(MessagePassing, self).__init__()
-        self.mlp_node = nn.Sequential([
-                                       nn.Linear(2*in_channels,m_channels),
-                                       nn.ReLU(),
-                                       nn.Linear(m_channels,out_channels)
-                                      ])
-        self.mlp_edge = nn.Sequential([
-                                       nn.Linear(3*in_channels,m_channels),
-                                       nn.ReLU(),
-                                       nn.Linear(m_channels,out_channels)
-                                      ])
+        '''
+        self.mlp_node = Seq(
+                            torch.nn.Linear(2*in_channels,m_channels),
+                            torch.nn.ReLU(),
+                            torch.nn.Linear(m_channels,out_channels)
+                            )
+        self.mlp_edge = Seq(
+                            torch.nn.Linear(3*in_channels,m_channels),
+                            torch.nn.ReLU(),
+                            torch.nn.Linear(m_channels,out_channels)
+                            )
+        '''
+        self.mlp_edge = Seq(
+                            BasicConv([in_edge + 2*in_node, m_channels], 'relu', None, True),
+                            BasicConv([m_channels,out_channels], None, None, True)
+        )
+        self.mlp_node = Seq(
+                            BasicConv([in_node + out_channels, m_channels], 'relu', None, True),
+                            BasicConv([m_channels,out_channels], None, None, True)
+        )
 
-    def forward(self, node_features, edge_features, edge_index):
+    def forward(self, node_features, e_ij, edge_index):
         h_i = batched_index_select(node_features, edge_index[1])
         h_j = batched_index_select(node_features, edge_index[0])
-        gh_i = batched_index_select(edge_features, edge_index[1])
-        gh_j = batched_index_select(edge_features, edge_index[0])
-        e_ij = gh_i-gh_j
         e_ij_prima = self.mlp_edge(torch.cat((e_ij,h_i,h_j), dim = 1))
-        m = torch.sum(eij_prima, dim = 1)
-        h_i_prima = self.mlp_node(h_i,m)
-        return h_i_prima, e_ij_prima, edge_index
+        #replicate last dimension so that it is K and not 1
+        m = torch.sum(e_ij_prima, dim = 3, keepdim=True).expand([e_ij_prima.shape[0],e_ij_prima.shape[1],e_ij_prima.shape[2],h_i.shape[-1]])
+        h_i_prima = self.mlp_node(torch.cat((h_i,m), dim=1))
+        return h_i_prima[:,:,:,0].unsqueeze(-1), e_ij_prima, edge_index
 
 class CustomDenseGCN(torch.nn.Module):
     def __init__(self, opt):
-        super(CustomDenseDeepGCN, self).__init__()
+        super(CustomDenseGCN, self).__init__()
         channels = opt.n_filters
         k = opt.k
         act = opt.act
@@ -141,7 +149,7 @@ class CustomDenseGCN(torch.nn.Module):
         self.graph = opt.graph
         self.knn_criterion = opt.knn_criterion
         self.mlp_conn = opt.mlp_conn
-        if self.knn_criterion == 'MLP' or self.graph == 'sim':
+        if self.knn_criterion == 'MLP':
             #self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,opt.in_channels))
             '''
             self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,27),
@@ -157,59 +165,63 @@ class CustomDenseGCN(torch.nn.Module):
                                                 torch.nn.Dropout(self.dropout),
                                                 torch.nn.Linear(32,opt.in_channels),
                                                 torch.nn.Dropout(self.dropout))
-            if self.mlp_conn == 'dense':
-                self.head = MessagePassing(2*opt.in_channels, 2*channels, channels)
-            else:
-                self.head = MessagePassing(opt.in_channels, 2*channels, channels)
+            self.head = MessagePassing(opt.in_channels, opt.in_channels, 2*channels, channels)
+        
+        elif self.knn_criterion == 'all':
+            self.head = MessagePassing(opt.in_channels, opt.in_channels, 2*channels, channels)
         else:
-            self.head = MessagePassing(opt.in_channels, 2*channels, channels)
+            self.head = MessagePassing(opt.in_channels, 3, 2*channels, channels)
 
         self.knn = DenseKnnGraph(k)
 
-        self.backbone = Seq(*[MessagePassing(channels, 2*channels, channels)
+        self.backbone = Seq(*[MessagePassing(channels, channels, 2*channels, channels)
                               for i in range(self.n_blocks - 1)])
         fusion_dims = int(channels + c_growth * (self.n_blocks - 1))
 
-        self.fusion_block = Seq([
-                                 nn.Linear(fusion_dims,1024),
-                                 nn.ReLU()
-                                ])
-        self.prediction = Seq([
-                               nn.Linear(fusion_dims+1024, 512),
-                               nn.ReLU(),
-                               nn.Linear(512,256),
-                               nn.ReLU(),
-                               nn.Linear(256,pt.n_classes)
-                              ])
-    
+        '''self.fusion_block = Seq(
+                                torch.nn.Linear(fusion_dims,1024),
+                                torch.nn.ReLU()
+                                )
+        self.prediction = Seq(
+                              torch.nn.Linear(fusion_dims+1024, 512),
+                              torch.nn.ReLU(),
+                              torch.nn.Linear(512,256),
+                              torch.nn.ReLU(),
+                              torch.nn.Linear(256,opt.n_classes)
+                              )
+        '''
+        self.fusion_block = BasicConv([fusion_dims, 1024], act, norm, bias)
+        self.prediction = Seq(*[BasicConv([fusion_dims+1024, 512], act, norm, bias),
+                                BasicConv([512, 256], act, norm, bias),
+                                torch.nn.Dropout(p=opt.dropout),
+                                BasicConv([256, opt.n_classes], None, None, bias)])
+
     def forward(self, inputs):
         #remove scaled xyz
         inputs = inputs[:,:6]
-        if self.graph == 'KNN':
-            if self.knn_criterion == 'xyz':
-                edge_index = self.knn(inputs[:, 0:3])
-            elif self.knn_criterion == 'all':
-                edge_index = self.knn(inputs)
-            elif self.knn_criterion == 'color':
-                edge_index = self.knn(inputs[:, 3:6])
-            elif self.knn_criterion == 'MLP':
-                #inputs shape is B,9,N_points,1
-                mlp_features = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
-                edge_index = self.knn(mlp_features)
-                if self.mlp_conn == 'dense':
-                    inputs = torch.cat((mlp_features,inputs),dim=1)
-                else:
-                    inputs = mlp_features
-        else:
-            mlp_features = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
-            similarities, edge_index = self.similarity_graph(mlp_features)
-            #print(inputs.shape, similarities.shape)
-            inputs = torch.cat((mlp_features,inputs),dim=1)
-        h_1, e_1, edge_index = self.head(inputs, edge_index)
+        if self.knn_criterion == 'xyz':
+            edge_index = self.knn(inputs[:, 0:3])
+            edge_features = inputs[:,:3]
+        elif self.knn_criterion == 'all':
+            edge_index = self.knn(inputs)
+            edge_features = inputs[:,:6]
+        elif self.knn_criterion == 'color':
+            edge_index = self.knn(inputs[:, 3:6])
+            edge_features = inputs[:,3:6]
+        elif self.knn_criterion == 'MLP':
+            #inputs shape is B,9,N_points,1
+            edge_features = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
+            edge_index = self.knn(edge_features)
+        gh_i = batched_index_select(edge_features, edge_index[1])
+        gh_j = batched_index_select(edge_features, edge_index[0])
+        e_ij = gh_i-gh_j
+        h_1, e_1, edge_index = self.head(inputs, e_ij, edge_index)
         feats = [h_1]
+        feats_edges = [e_1]
         for i in range(self.n_blocks-1):
-            h_i, e_i, edge_index = self.backbone[i](feats[-1], edge_index)
+            h_i, e_i, edge_index = self.backbone[i](feats[-1],feats_edges[-1], edge_index)
             feats.append(h_i)
+            feats_edges.append(e_i)
         feats = torch.cat(feats, dim=1)
 
         fusion = torch.max_pool2d(self.fusion_block(feats), kernel_size=[feats.shape[2], feats.shape[3]])

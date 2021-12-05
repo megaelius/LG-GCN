@@ -12,25 +12,23 @@ import torch_geometric.transforms as T
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 from config import OptInit
-from architecture import DenseDeepGCN, CustomDenseDeepGCN
+from architecture import CustomDenseDeepGCN, CustomDenseGCN
 from utils.ckpt_util import load_pretrained_models, load_pretrained_optimizer, save_checkpoint
 from utils.metrics import AverageMeter
 import logging
 from tqdm import tqdm
 from parallel_wrapper import launch
 import comm
-from torch.utils.tensorboard import SummaryWriter
-
-writer = SummaryWriter(log_dir='log/4layers_mlp')
+import wandb
 
 def train(model, train_loader, optimizer, criterion, opt, cur_rank):
-    opt.losses.reset()
     model.train()
+    total_loss = 0
     with tqdm(train_loader) as tqdm_loader:
         for i, data in enumerate(tqdm_loader):
             opt.iter += 1
-            desc = 'Epoch:{}  Iter:{}  [{}/{}]  Loss:{Losses.avg: .4f}'\
-                .format(opt.epoch, opt.iter, i + 1, len(train_loader), Losses=opt.losses)
+            desc = 'Epoch:{}  Iter:{}  [{}/{}]'\
+                .format(opt.epoch, opt.iter, i + 1, len(train_loader))
             tqdm_loader.set_description(desc)
 
             inputs = torch.cat((data.pos.transpose(2, 1).unsqueeze(3), data.x.transpose(2, 1).unsqueeze(3)), 1)
@@ -39,17 +37,18 @@ def train(model, train_loader, optimizer, criterion, opt, cur_rank):
             optimizer.zero_grad()
             out = model(inputs)
             loss = criterion(out, gt)
-
+            total_loss+=loss.item()
             # ------------------ optimization
             loss.backward()
             optimizer.step()
 
-            opt.losses.update(loss.item())
+    return loss.item()
 
 
-def test(model, loader, opt, cur_rank):
+def test(model, loader, criterion, opt, cur_rank):
     Is = np.empty((len(loader), opt.n_classes))
     Us = np.empty((len(loader), opt.n_classes))
+    total_loss = 0
 
     model.eval()
     with torch.no_grad():
@@ -58,6 +57,8 @@ def test(model, loader, opt, cur_rank):
             gt = data.y
 
             out = model(inputs)
+            loss = criterion(out, gt.to(opt.device))
+            total_loss+=loss.item()
             pred = out.max(dim=1)[1]
 
             pred_np = pred.cpu().numpy()
@@ -79,8 +80,8 @@ def test(model, loader, opt, cur_rank):
         for cl in range(opt.n_classes):
             logging.info("===> mIOU for class {}: {}".format(cl, ious[cl]))
 
-    opt.test_value = iou
-    logging.info('TEST Epoch: [{}]\t mIoU: {:.4f}\t'.format(opt.epoch, opt.test_value))
+    logging.info('TEST Epoch: [{}]\t mIoU: {:.4f}\t'.format(opt.epoch, iou))
+    return loss.item(), iou
 
 def epochs(opt):
     logging.info('===> Creating dataloader ...')
@@ -95,11 +96,15 @@ def epochs(opt):
     cur_rank = comm.get_local_rank()
 
     logging.info('===> Loading the network ...')
-    model = DistributedDataParallel(CustomDenseDeepGCN(opt).to(cur_rank),device_ids=[cur_rank], output_device=cur_rank,broadcast_buffers=False).to(cur_rank)
+    model = DistributedDataParallel(CustomDenseGCN(opt).to(cur_rank),device_ids=[cur_rank], output_device=cur_rank,broadcast_buffers=False).to(cur_rank)
 
     logging.info('===> loading pre-trained ...')
     model, opt.best_value, opt.epoch = load_pretrained_models(model, opt.pretrained_model, opt.phase)
     logging.info(model)
+    if comm.is_main_process():
+        wandb.init(project="LG-GCN")
+        wandb.run.name = opt.exp_name
+        wandb.watch(model,log_freq=100,log="all")
 
     logging.info('===> Init the optimizer ...')
     criterion = torch.nn.CrossEntropyLoss().to(cur_rank)
@@ -109,8 +114,6 @@ def epochs(opt):
     optimizer, scheduler, opt.lr = load_pretrained_optimizer(opt.pretrained_model, optimizer, scheduler, opt.lr)
 
     logging.info('===> Init Metric ...')
-    opt.losses = AverageMeter()
-    opt.test_value = 0.
 
     logging.info('===> start training ...')
     for _ in range(opt.epoch, opt.total_epochs):
@@ -118,9 +121,9 @@ def epochs(opt):
         train_sampler.set_epoch(opt.epoch)
         test_sampler.set_epoch(opt.epoch)
         logging.info('Epoch:{}'.format(opt.epoch))
-        train(model, train_loader, optimizer, criterion, opt, cur_rank)
+        train_loss = train(model, train_loader, optimizer, criterion, opt, cur_rank)
         if opt.epoch % opt.eval_freq == 0 and opt.eval_freq != -1:
-            test(model, test_loader, opt, cur_rank)
+            test_loss, test_iou = test(model, test_loader, criterion, opt, cur_rank)
         scheduler.step()
         if comm.is_main_process():
             # ------------------ save checkpoints
@@ -136,19 +139,12 @@ def epochs(opt):
                 'best_value': opt.best_value,
             }, is_best, opt.ckpt_dir, opt.exp_name)
             # ------------------ tensorboard log
-            info = {
-                'loss': opt.losses.avg,
-                'test_value': opt.test_value,
-                'lr': scheduler.get_lr()[0]
-            }
-            writer.add_scalar('Train Loss', info['loss'], opt.epoch)
-            writer.add_scalar('Test IOU', info['test_value'], opt.epoch)
-            writer.add_scalar('lr', info['lr'], opt.epoch)
+            wandb.log({'Train/loss': train_loss,
+                       'Val/loss': test_loss,
+                       'Val/IOU':test_iou,
+                       'lr':scheduler.get_lr()[0]}, step=opt.epoch)
 
         logging.info('Saving the final model.Finish!')
-
-def hola():
-    print('Hola')
 
 def main():
     opt = OptInit().get_args()
