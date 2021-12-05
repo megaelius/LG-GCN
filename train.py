@@ -104,7 +104,7 @@ def epochs(opt):
     if comm.is_main_process():
         wandb.init(project="LG-GCN")
         wandb.run.name = opt.exp_name
-        wandb.watch(model,log_freq=100,log="all")
+        #wandb.watch(model,log_freq=100,log="all")
 
     logging.info('===> Init the optimizer ...')
     criterion = torch.nn.CrossEntropyLoss().to(cur_rank)
