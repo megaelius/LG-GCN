@@ -30,7 +30,7 @@ class OptInit:
         parser.add_argument('--data_dir', type=str, default='/data/deepgcn/S3DIS',
                             help="data dir, will download dataset here automatically")
         parser.add_argument('--area', type=int, default=5, help='the cross validated area of S3DIS')
-        parser.add_argument('--in_channels', default=9, type=int, help='the channel size of input point cloud ')
+        parser.add_argument('--in_channels', default=6, type=int, help='the channel size of input point cloud ')
 
         # ----------------- Training related
         parser.add_argument('--batch_size', default=16, type=int, help='mini-batch size (default:16)')
@@ -60,8 +60,10 @@ class OptInit:
         parser.add_argument('--norm', default='batch', type=str, help='{batch, instance, None} normalization')
         parser.add_argument('--bias', default=True,  type=bool, help='bias of conv layer True or False')
         parser.add_argument('--n_filters', default=64, type=int, help='number of channels of deep features')
-        parser.add_argument('--n_blocks', default=28, type=int, help='number of basic blocks')
-        parser.add_argument('--dropout', default=0.3, type=float, help='ratio of dropout')
+        parser.add_argument('--n_blocks', default=4, type=int, help='number of basic blocks')
+        parser.add_argument('--dropout', default=0, type=float, help='ratio of dropout')
+        parser.add_argument('--mlp_conn', default='plain', type=str, help='input of the net after mlp-knn')
+
 
         # dilated knn
         parser.add_argument('--epsilon', default=0.2, type=float, help='stochastic epsilon for gcn')

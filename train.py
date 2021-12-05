@@ -21,7 +21,7 @@ from parallel_wrapper import launch
 import comm
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter(log_dir='log/baseline_all')
+writer = SummaryWriter(log_dir='log/4layers_mlp')
 
 def train(model, train_loader, optimizer, criterion, opt, cur_rank):
     opt.losses.reset()
