@@ -101,7 +101,7 @@ class MessagePassing(torch.nn.Module):
     """
     Graph convolution adapted from Kearnes et al. (2016), https://arxiv.org/abs/1603.00856
     """
-    def __init__(self, in_node, in_edge, m_channels, out_channels):
+    def __init__(self, in_node, in_edge, m_channels, out_channels, norm):
         super(MessagePassing, self).__init__()
         '''
         self.mlp_node = Seq(
@@ -116,12 +116,12 @@ class MessagePassing(torch.nn.Module):
                             )
         '''
         self.mlp_edge = Seq(
-                            BasicConv([in_edge + 2*in_node, m_channels], 'relu', None, True),
-                            BasicConv([m_channels,out_channels], None, None, True)
+                            BasicConv([in_edge + 2*in_node, m_channels], 'relu', norm, True),
+                            BasicConv([m_channels,out_channels], None, norm, True)
         )
         self.mlp_node = Seq(
-                            BasicConv([in_node + out_channels, m_channels], 'relu', None, True),
-                            BasicConv([m_channels,out_channels], None, None, True)
+                            BasicConv([in_node + out_channels, m_channels], 'relu', norm, True),
+                            BasicConv([m_channels,out_channels], None, norm, True)
         )
 
     def forward(self, node_features, e_ij, edge_index):
@@ -152,29 +152,26 @@ class CustomDenseGCN(torch.nn.Module):
         if self.knn_criterion == 'MLP':
             #self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,opt.in_channels))
             '''
-            self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,27),
-                                                torch.nn.ReLU(),
-                                                torch.nn.Linear(27,27),
-                                                torch.nn.ReLU(),
-                                                torch.nn.Linear(27,9),
-                                                torch.nn.ReLU(),
-                                                torch.nn.Linear(9,opt.in_channels))
-            '''
             self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(opt.in_channels,32),
                                                 torch.nn.ReLU(),
                                                 torch.nn.Dropout(self.dropout),
                                                 torch.nn.Linear(32,opt.in_channels),
                                                 torch.nn.Dropout(self.dropout))
-            self.head = MessagePassing(opt.in_channels, opt.in_channels, 2*channels, channels)
+            '''
+            self.graph_mlp = Seq(
+                                 BasicConv([opt.in_channels, 32], 'relu', norm, True),
+                                 BasicConv([32,opt.in_channels], None, norm, True)
+            )
+            self.head = MessagePassing(opt.in_channels, opt.in_channels, 2*channels, channels, norm)
         
         elif self.knn_criterion == 'all':
-            self.head = MessagePassing(opt.in_channels, opt.in_channels, 2*channels, channels)
+            self.head = MessagePassing(opt.in_channels, opt.in_channels, 2*channels, channels, norm)
         else:
-            self.head = MessagePassing(opt.in_channels, 3, 2*channels, channels)
+            self.head = MessagePassing(opt.in_channels, 3, 2*channels, channels, norm)
 
         self.knn = DenseKnnGraph(k)
 
-        self.backbone = Seq(*[MessagePassing(channels, channels, 2*channels, channels)
+        self.backbone = Seq(*[MessagePassing(channels, channels, 2*channels, channels, norm)
                               for i in range(self.n_blocks - 1)])
         fusion_dims = int(channels + c_growth * (self.n_blocks - 1))
 
@@ -210,7 +207,7 @@ class CustomDenseGCN(torch.nn.Module):
             edge_features = inputs[:,3:6]
         elif self.knn_criterion == 'MLP':
             #inputs shape is B,9,N_points,1
-            edge_features = self.graph_mlp(inputs.transpose(3,1)).transpose(3,1)
+            edge_features = self.graph_mlp(inputs)
             edge_index = self.knn(edge_features)
         gh_i = batched_index_select(edge_features, edge_index[1])
         gh_j = batched_index_select(edge_features, edge_index[0])
