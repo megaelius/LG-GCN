@@ -117,6 +117,14 @@ def epochs(opt):
 
     logging.info('===> start training ...')
     for _ in range(opt.epoch, opt.total_epochs):
+        filtered_parameters = []
+        for name, param in model.named_parameters():
+            #filter(lambda t: ( t[0][:16] == 'module.graph_mlp') or (not bool(opt.epoch%2) and t[0][:16] != 'module.graph_mlp'), model.parameters())
+            if (not bool(opt.epoch%2) and name[:16] == 'module.graph_mlp') or (bool(opt.epoch%2) and name[:16] != 'module.graph_mlp'):
+                print(name)
+                filtered_parameters.append(param)
+        optimizer = torch.optim.Adam(filtered_parameters)
+            
         opt.epoch += 1
         train_sampler.set_epoch(opt.epoch)
         test_sampler.set_epoch(opt.epoch)
