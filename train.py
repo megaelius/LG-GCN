@@ -116,11 +116,16 @@ def epochs(opt):
     logging.info('===> Init Metric ...')
 
     logging.info('===> start training ...')
+    epochs_frozen = 0
+    freeze_graph = True
     for _ in range(opt.epoch, opt.total_epochs):
         filtered_parameters = []
+        if epochs_frozen == 10:
+            freeze_graph = not freeze_graph
+            epochs_frozen = 0
         for name, param in model.named_parameters():
             #filter(lambda t: ( t[0][:16] == 'module.graph_mlp') or (not bool(opt.epoch%2) and t[0][:16] != 'module.graph_mlp'), model.parameters())
-            if (not bool(opt.epoch%2) and name[:16] == 'module.graph_mlp') or (bool(opt.epoch%2) and name[:16] != 'module.graph_mlp'):
+            if (freeze_graph and name[:16] == 'module.graph_mlp') or (not freeze_graph and name[:16] != 'module.graph_mlp'):
                 print(name)
                 filtered_parameters.append(param)
         optimizer = torch.optim.Adam(filtered_parameters)
@@ -153,6 +158,7 @@ def epochs(opt):
                        'lr':scheduler.get_lr()[0]}, step=opt.epoch)
 
         logging.info('Saving the final model.Finish!')
+        epochs_frozen += 1
 
 def main():
     opt = OptInit().get_args()
