@@ -7,12 +7,14 @@ import numpy as np
 import torch
 import torch.multiprocessing as mp
 import torch_geometric.datasets as GeoData
-from torch_geometric.loader import DenseDataLoader
+from modelnet40 import ModelNet40
+from scanobjectnn import ScanObjectNN
+from torch.utils.data import DataLoader
 import torch_geometric.transforms as T
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 from config import OptInit
-from architecture import CustomDenseDeepGCN, CustomDenseGCN
+from architecture import ClassificationGraphNN
 from utils.ckpt_util import load_pretrained_models, load_pretrained_optimizer, save_checkpoint
 from utils.metrics import AverageMeter
 import logging
@@ -20,29 +22,42 @@ from tqdm import tqdm
 from parallel_wrapper import launch
 import comm
 import wandb
+from sklearn.metrics import accuracy_score
 
 def train(model, train_loader, optimizer, criterion, opt, cur_rank):
     model.train()
     total_loss = 0
+
+    targets = []
+    preds = []
     with tqdm(train_loader) as tqdm_loader:
-        for i, data in enumerate(tqdm_loader):
+        for i, (data,label,_) in enumerate(tqdm_loader):
             opt.iter += 1
             desc = 'Epoch:{}  Iter:{}  [{}/{}]'\
                 .format(opt.epoch, opt.iter, i + 1, len(train_loader))
             tqdm_loader.set_description(desc)
 
-            inputs = torch.cat((data.pos.transpose(2, 1).unsqueeze(3), data.x.transpose(2, 1).unsqueeze(3)), 1)
-            gt = data.y.to(opt.device)
+            inputs = data.transpose(2, 1).unsqueeze(3)
+            gt = label.unsqueeze(1).to(opt.device)
             # ------------------ zero, output, loss
             optimizer.zero_grad()
             out = model(inputs)
-            loss = criterion(out, gt)
+            loss = criterion(out.float(), gt.long())
             total_loss+=loss.item()
             # ------------------ optimization
             loss.backward()
             optimizer.step()
 
-    return loss.item()
+            target_np = gt.cpu().numpy()
+            pred = out.max(dim=1)[1]
+            pred_np = pred.cpu().numpy()
+            
+            targets += list(target_np.ravel())
+            preds += list(pred_np.ravel())
+
+    acc = accuracy_score(targets, preds)
+
+    return loss.item(), acc
 
 
 def test(model, loader, criterion, opt, cur_rank):
@@ -50,59 +65,66 @@ def test(model, loader, criterion, opt, cur_rank):
     Us = np.empty((len(loader), opt.n_classes))
     total_loss = 0
 
+    targets = []
+    preds = []
+
     model.eval()
     with torch.no_grad():
-        for i, data in enumerate(tqdm(loader)):
-            inputs = torch.cat((data.pos.transpose(2, 1).unsqueeze(3), data.x.transpose(2, 1).unsqueeze(3)), 1)
-            gt = data.y
+        for i, (data, label,_) in enumerate(tqdm(loader)):
+
+            inputs = data.transpose(2, 1).unsqueeze(3)
+            gt = label.unsqueeze(1).to(opt.device)
 
             out = model(inputs)
-            loss = criterion(out, gt.to(opt.device))
+            loss = criterion(out.float(), gt.long().to(opt.device))
             total_loss+=loss.item()
             pred = out.max(dim=1)[1]
 
-            pred_np = pred.cpu().numpy()
             target_np = gt.cpu().numpy()
+            pred_np = pred.cpu().numpy()
+            
+            targets += list(target_np.ravel())
+            preds += list(pred_np.ravel())
+            
+    acc = accuracy_score(targets, preds)
 
-            for cl in range(opt.n_classes):
-                cur_gt_mask = (target_np == cl)
-                cur_pred_mask = (pred_np == cl)
-                I = np.sum(np.logical_and(cur_pred_mask, cur_gt_mask), dtype=np.float32)
-                U = np.sum(np.logical_or(cur_pred_mask, cur_gt_mask), dtype=np.float32)
-                Is[i, cl] = I
-                Us[i, cl] = U
-
-    ious = np.divide(np.sum(Is, 0), np.sum(Us, 0))
-    ious[np.isnan(ious)] = 1
-    iou = np.mean(ious)
-
-    if opt.phase == 'test':
-        for cl in range(opt.n_classes):
-            logging.info("===> mIOU for class {}: {}".format(cl, ious[cl]))
-
-    logging.info('TEST Epoch: [{}]\t mIoU: {:.4f}\t'.format(opt.epoch, iou))
-    return loss.item(), iou
+    logging.info('TEST Epoch: [{}]\t Acc: {:.4f}\t'.format(opt.epoch, acc))
+    return loss.item(), acc
 
 def epochs(opt):
     logging.info('===> Creating dataloader ...')
-    train_dataset = GeoData.S3DIS(opt.data_dir, opt.area, True, pre_transform=T.NormalizeScale())
+    #train_dataset = GeoData.ModelNet(opt.data_dir, name = '40', train = True, pre_transform=T.NormalizeScale())
+    #train_sampler = DistributedSampler(train_dataset, shuffle=True, seed=opt.seed)
+    #train_loader = DenseDataLoader(train_dataset, batch_size=opt.batch_size, shuffle=False, sampler = train_sampler, num_workers=opt.n_gpus)
+    #test_dataset = GeoData.ModelNet(opt.data_dir, name = '40', train=False, pre_transform=T.NormalizeScale())
+    #test_sampler = DistributedSampler(test_dataset, shuffle=False, seed=opt.seed)
+    #test_loader = DenseDataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, sampler = test_sampler, num_workers=opt.n_gpus)
+    
+    train_dataset = ScanObjectNN(os.path.join(opt.data_dir, 'training_objectdataset_augmentedrot_scale75.h5'), 
+                                 train=True,
+                                 center=True,
+                                 normalize=True)
     train_sampler = DistributedSampler(train_dataset, shuffle=True, seed=opt.seed)
-    train_loader = DenseDataLoader(train_dataset, batch_size=opt.batch_size, shuffle=False, sampler = train_sampler, num_workers=opt.n_gpus)
-    test_dataset = GeoData.S3DIS(opt.data_dir, opt.area, train=False, pre_transform=T.NormalizeScale())
+    train_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=False, sampler = train_sampler, num_workers=opt.n_gpus, drop_last=False)
+    test_dataset = ScanObjectNN(os.path.join(opt.data_dir, 'test_objectdataset_augmentedrot_scale75.h5'),
+                                train=False,
+                                center=True,
+                                normalize=True)
     test_sampler = DistributedSampler(test_dataset, shuffle=False, seed=opt.seed)
-    test_loader = DenseDataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, sampler = test_sampler, num_workers=opt.n_gpus)
-    opt.n_classes = train_loader.dataset.num_classes
+    test_loader = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, sampler = test_sampler, num_workers=opt.n_gpus, drop_last=False)
+
+    opt.n_classes = 15
 
     cur_rank = comm.get_local_rank()
 
     logging.info('===> Loading the network ...')
-    model = DistributedDataParallel(CustomDenseGCN(opt).to(cur_rank),device_ids=[cur_rank], output_device=cur_rank,broadcast_buffers=False).to(cur_rank)
+    model = DistributedDataParallel(ClassificationGraphNN(opt).to(cur_rank),device_ids=[cur_rank], output_device=cur_rank,broadcast_buffers=False).to(cur_rank)
 
     logging.info('===> loading pre-trained ...')
     model, opt.best_value, opt.epoch = load_pretrained_models(model, opt.pretrained_model, opt.phase)
     logging.info(model)
     if comm.is_main_process():
-        wandb.init(project="LG-GCN")
+        wandb.init(project="ScanObjectNN")
         wandb.run.name = opt.exp_name
         wandb.watch(model,log_freq=100,log="all")
 
@@ -136,15 +158,15 @@ def epochs(opt):
         train_sampler.set_epoch(opt.epoch)
         test_sampler.set_epoch(opt.epoch)
         logging.info('Epoch:{}'.format(opt.epoch))
-        train_loss = train(model, train_loader, optimizer, criterion, opt, cur_rank)
+        train_loss, train_acc = train(model, train_loader, optimizer, criterion, opt, cur_rank)
         if opt.epoch % opt.eval_freq == 0 and opt.eval_freq != -1:
-            test_loss, test_iou = test(model, test_loader, criterion, opt, cur_rank)
+            test_loss, test_acc = test(model, test_loader, criterion, opt, cur_rank)
         scheduler.step()
         if comm.is_main_process():
             # ------------------ save checkpoints
             # min or max. based on the metrics
-            is_best = (test_iou < opt.best_value)
-            opt.best_value = max(test_iou, opt.best_value)
+            is_best = (test_acc < opt.best_value)
+            opt.best_value = max(test_acc, opt.best_value)
             model_cpu = {k: v.cpu() for k, v in model.state_dict().items()}
             save_checkpoint({
                 'epoch': opt.epoch,
@@ -156,7 +178,8 @@ def epochs(opt):
             # ------------------ tensorboard log
             wandb.log({'Train/loss': train_loss,
                        'Val/loss': test_loss,
-                       'Val/IOU':test_iou,
+                       'Train/Accuracy':train_acc,
+                       'Val/Accuracy':test_acc,
                        'lr':scheduler.get_lr()[0]}, step=opt.epoch)
 
         logging.info('Saving the final model.Finish!')

@@ -21,7 +21,7 @@ from parallel_wrapper import launch
 import comm
 import wandb
 
-def train(model, train_loader, optimizer, criterion, opt, cur_rank):
+def train(model, train_loader, optimizer, criterion, opt, cur_rank, use_mlp_graph):
     model.train()
     total_loss = 0
     with tqdm(train_loader) as tqdm_loader:
@@ -35,7 +35,7 @@ def train(model, train_loader, optimizer, criterion, opt, cur_rank):
             gt = data.y.to(opt.device)
             # ------------------ zero, output, loss
             optimizer.zero_grad()
-            out = model(inputs)
+            out = model(inputs,use_mlp_graph)
             loss = criterion(out, gt)
             total_loss+=loss.item()
             # ------------------ optimization
@@ -45,7 +45,7 @@ def train(model, train_loader, optimizer, criterion, opt, cur_rank):
     return loss.item()
 
 
-def test(model, loader, criterion, opt, cur_rank):
+def test(model, loader, criterion, opt, cur_rank, use_mlp_graph):
     Is = np.empty((len(loader), opt.n_classes))
     Us = np.empty((len(loader), opt.n_classes))
     total_loss = 0
@@ -56,7 +56,7 @@ def test(model, loader, criterion, opt, cur_rank):
             inputs = torch.cat((data.pos.transpose(2, 1).unsqueeze(3), data.x.transpose(2, 1).unsqueeze(3)), 1)
             gt = data.y
 
-            out = model(inputs)
+            out = model(inputs, use_mlp_graph)
             loss = criterion(out, gt.to(opt.device))
             total_loss+=loss.item()
             pred = out.max(dim=1)[1]
@@ -119,26 +119,24 @@ def epochs(opt):
     epochs_frozen = 0
     freeze_graph = True
     for _ in range(opt.epoch, opt.total_epochs):
-        '''
         filtered_parameters = []
-        if epochs_frozen == 5:
+        if epochs_frozen == 60:
             freeze_graph = not freeze_graph
             epochs_frozen = 0
         for name, param in model.named_parameters():
             #filter(lambda t: ( t[0][:16] == 'module.graph_mlp') or (not bool(opt.epoch%2) and t[0][:16] != 'module.graph_mlp'), model.parameters())
-            if (freeze_graph and name[:16] == 'module.graph_mlp') or (not freeze_graph and name[:16] != 'module.graph_mlp'):
+            if (not freeze_graph and name[:16] == 'module.graph_mlp') or (freeze_graph and name[:16] != 'module.graph_mlp'):
                 print(name)
                 filtered_parameters.append(param)
         optimizer = torch.optim.Adam(filtered_parameters)
-        '''
 
         opt.epoch += 1
         train_sampler.set_epoch(opt.epoch)
         test_sampler.set_epoch(opt.epoch)
         logging.info('Epoch:{}'.format(opt.epoch))
-        train_loss = train(model, train_loader, optimizer, criterion, opt, cur_rank)
+        train_loss = train(model, train_loader, optimizer, criterion, opt, cur_rank, not freeze_graph)
         if opt.epoch % opt.eval_freq == 0 and opt.eval_freq != -1:
-            test_loss, test_iou = test(model, test_loader, criterion, opt, cur_rank)
+            test_loss, test_iou = test(model, test_loader, criterion, opt, cur_rank, not freeze_graph)
         scheduler.step()
         if comm.is_main_process():
             # ------------------ save checkpoints

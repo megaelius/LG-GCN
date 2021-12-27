@@ -38,13 +38,14 @@ class OptInit:
         parser.add_argument('--save_freq', default=1, type=int, help='save model per num of epochs')
         parser.add_argument('--iter', default=0, type=int, help='number of iteration to start')
         parser.add_argument('--lr_adjust_freq', default=20, type=int, help='decay lr after certain number of epochs')
-        parser.add_argument('--lr', default=1e-3, type=float, help='initial learning rate')
+        parser.add_argument('--lr', default=1e-4, type=float, help='initial learning rate')
         parser.add_argument('--lr_decay_rate', default=0.5, type=float, help='learning rate decay')
         parser.add_argument('--print_freq', default=100, type=int, help='print frequency of training (default: 100)')
         parser.add_argument('--eval_freq', default=1, type=int,
                             help='evaluation frequency of training (default: 1). Set as -1 to disable evaluation')
         parser.add_argument('--n_gpus', type=int, help='Number of GPUs')
         parser.add_argument('--seed', type=int, default=0, help='random seed')
+        parser.add_argument('--decay', type=float, default=0, help='weight decay')
 
         # ----------------- Testing related
         parser.add_argument('--no_clutter', action='store_true', help='no clutter? set --no_clutter if ture.')
@@ -61,8 +62,8 @@ class OptInit:
         parser.add_argument('--bias', default=True,  type=bool, help='bias of conv layer True or False')
         parser.add_argument('--n_filters', default=64, type=int, help='number of channels of deep features')
         parser.add_argument('--n_blocks', default=4, type=int, help='number of basic blocks')
-        parser.add_argument('--dropout', default=0, type=float, help='ratio of dropout')
-        parser.add_argument('--mlp_conn', default='plain', type=str, help='input of the net after mlp-knn')
+        parser.add_argument('--dropout', default=0.3, type=float, help='ratio of dropout')
+        parser.add_argument('--graph_feats', default=8, type=int, help='Number of output features of the MLP that is used to learn the graph features.')
 
 
         # dilated knn

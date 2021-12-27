@@ -27,4 +27,6 @@ examples/part_sem_seg/script/
 
 weights/
 log/
+log_ModelNet40/
+log_ScanObjectNN/
 wandb/
