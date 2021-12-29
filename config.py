@@ -63,12 +63,11 @@ class OptInit:
         parser.add_argument('--n_filters', default=64, type=int, help='number of channels of deep features')
         parser.add_argument('--n_blocks', default=4, type=int, help='number of basic blocks')
         parser.add_argument('--dropout', default=0.3, type=float, help='ratio of dropout')
+        parser.add_argument('--graph_dropout', default=0.3, type=float, help='ratio of dropout of the graph mlp')
+        parser.add_argument('--graph_l2reg', default=0.0005, type=float, help='ratio of dropout of the graph mlp')
         parser.add_argument('--graph_feats', default=8, type=int, help='Number of output features of the MLP that is used to learn the graph features.')
+        parser.add_argument('--d2d_weight', default=0.005, type=float, help='distance to distance loss weight')
 
-
-        # dilated knn
-        parser.add_argument('--epsilon', default=0.2, type=float, help='stochastic epsilon for gcn')
-        parser.add_argument('--stochastic', default=True,  type=bool, help='stochastic for gcn, True or False')
         args = parser.parse_args()
 
         args.device = torch.device('cuda' if not args.use_cpu and torch.cuda.is_available() else 'cpu')

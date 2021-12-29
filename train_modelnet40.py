@@ -22,10 +22,22 @@ from parallel_wrapper import launch
 import comm
 import wandb
 from sklearn.metrics import accuracy_score
+from gcn_lib.dense import pairwise_distance
+
+def dist2distloss(feats1,feats2):
+    f1 = feats1.transpose(2, 1).squeeze(-1)
+    f2 = feats2.transpose(2, 1).squeeze(-1)
+    d1 = pairwise_distance(f1)/f1.shape[2]
+    d2 = pairwise_distance(f2)/f2.shape[2]
+    crit = torch.nn.MSELoss(reduction='sum')
+    return crit(d1,d2)
+
 
 def train(model, train_loader, optimizer, criterion, opt, cur_rank):
     model.train()
     total_loss = 0
+    total_d2d_loss = 0
+    total_ce_loss = 0
 
     targets = []
     preds = []
@@ -40,8 +52,26 @@ def train(model, train_loader, optimizer, criterion, opt, cur_rank):
             gt = label.to(opt.device)
             # ------------------ zero, output, loss
             optimizer.zero_grad()
-            out = model(inputs)
+            out, graph_feats = model(inputs)
+            #Cros Entropy
             loss = criterion(out, gt)
+            total_ce_loss += loss.item()
+
+            #L2 regularization of Graph features
+            l2_crit = torch.nn.L1Loss(reduction='sum')
+            reg_loss = 0
+            for name, param in model.named_parameters():
+                if name[:16] == 'module.graph_mlp':
+                    zero = torch.zeros_like(param)
+                    reg_loss += l2_crit(param,zero)
+            factor_l2 = opt.graph_l2reg
+            #Divergence of distance matrices
+            factor_dist2dist = opt.d2d_weight
+            d2d_loss = dist2distloss(inputs.to(opt.device), graph_feats)
+            total_d2d_loss += d2d_loss.item()
+
+            #Update loss
+            loss += factor_l2 * reg_loss + factor_dist2dist*d2d_loss
             total_loss+=loss.item()
             # ------------------ optimization
             loss.backward()
@@ -56,13 +86,15 @@ def train(model, train_loader, optimizer, criterion, opt, cur_rank):
 
     acc = accuracy_score(targets, preds)
 
-    return loss.item(), acc
+    return total_loss, total_d2d_loss, total_ce_loss, acc
 
 
 def test(model, loader, criterion, opt, cur_rank):
     Is = np.empty((len(loader), opt.n_classes))
     Us = np.empty((len(loader), opt.n_classes))
     total_loss = 0
+    total_d2d_loss = 0
+    total_ce_loss = 0
 
     targets = []
     preds = []
@@ -73,8 +105,17 @@ def test(model, loader, criterion, opt, cur_rank):
             inputs = data.transpose(2, 1).unsqueeze(3)
             gt = label.to(opt.device)
 
-            out = model(inputs)
+            out, graph_feats = model(inputs)
             loss = criterion(out, gt.to(opt.device))
+            total_ce_loss += loss.item()
+
+            #Divergence of distance matrices
+            factor_dist2dist = opt.d2d_weight
+            d2d_loss = dist2distloss(inputs.to(opt.device), graph_feats)
+            total_d2d_loss += d2d_loss.item()
+
+            #Update loss
+            loss += factor_dist2dist*d2d_loss
             total_loss+=loss.item()
             pred = out.max(dim=1)[1]
 
@@ -87,7 +128,7 @@ def test(model, loader, criterion, opt, cur_rank):
     acc = accuracy_score(targets, preds)
 
     logging.info('TEST Epoch: [{}]\t Acc: {:.4f}\t'.format(opt.epoch, acc))
-    return loss.item(), acc
+    return total_loss, total_d2d_loss, total_ce_loss, acc
 
 def epochs(opt):
     logging.info('===> Creating dataloader ...')
@@ -150,9 +191,9 @@ def epochs(opt):
         train_sampler.set_epoch(opt.epoch)
         test_sampler.set_epoch(opt.epoch)
         logging.info('Epoch:{}'.format(opt.epoch))
-        train_loss, train_acc = train(model, train_loader, optimizer, criterion, opt, cur_rank)
+        train_loss, train_d2d_loss, train_ce_loss, train_acc = train(model, train_loader, optimizer, criterion, opt, cur_rank)
         if opt.epoch % opt.eval_freq == 0 and opt.eval_freq != -1:
-            test_loss, test_acc = test(model, test_loader, criterion, opt, cur_rank)
+            test_loss, test_d2d_loss, test_ce_loss, test_acc = test(model, test_loader, criterion, opt, cur_rank)
         scheduler.step()
         if comm.is_main_process():
             # ------------------ save checkpoints
@@ -172,7 +213,11 @@ def epochs(opt):
                        'Val/loss': test_loss,
                        'Train/Accuracy':train_acc,
                        'Val/Accuracy':test_acc,
-                       'lr':scheduler.get_lr()[0]}, step=opt.epoch)
+                       'Train/d2d_loss':train_d2d_loss,
+                       'Val/d2d_loss':test_d2d_loss,
+                       'Train/ce_loss':train_ce_loss,
+                       'Val/ce_loss':test_ce_loss,
+                       'lr':scheduler.get_last_lr()[0]}, step=opt.epoch)
 
         logging.info('Saving the final model.Finish!')
         epochs_frozen += 1

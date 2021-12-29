@@ -41,7 +41,7 @@ def train(model, train_loader, optimizer, criterion, opt, cur_rank):
             gt = label.unsqueeze(1).to(opt.device)
             # ------------------ zero, output, loss
             optimizer.zero_grad()
-            out = model(inputs)
+            out, graph_feats = model(inputs)
             loss = criterion(out.float(), gt.long())
             total_loss+=loss.item()
             # ------------------ optimization
@@ -75,7 +75,7 @@ def test(model, loader, criterion, opt, cur_rank):
             inputs = data.transpose(2, 1).unsqueeze(3)
             gt = label.unsqueeze(1).to(opt.device)
 
-            out = model(inputs)
+            out, graph_feats = model(inputs)
             loss = criterion(out.float(), gt.long().to(opt.device))
             total_loss+=loss.item()
             pred = out.max(dim=1)[1]

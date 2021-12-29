@@ -266,6 +266,7 @@ class ClassificationGraphNN(torch.nn.Module):
                                  BasicConv([opt.in_channels, 16], 'relu', norm, True),
                                  BasicConv([16, 32], 'relu', norm, True),
                                  BasicConv([32, 16], 'relu', norm, True),
+                                 torch.nn.Dropout(p=opt.graph_dropout),
                                  BasicConv([16,self.graph_feats], None, None, True)
             )
         
@@ -312,7 +313,7 @@ class ClassificationGraphNN(torch.nn.Module):
         feats = torch.cat(feats, dim=1)
         fusion = torch.max_pool2d(self.fusion_block(feats), kernel_size=[feats.shape[2], feats.shape[3]])
 
-        return self.prediction(fusion).squeeze(-1)
+        return self.prediction(fusion).squeeze(-1), edge_features
         #return self.prediction(feats[-1]).squeeze(-1)
 
 if __name__ == "__main__":
