@@ -48,6 +48,7 @@ def load_data(partition):
 
 
 def translate_pointcloud(pointcloud):
+    #np.random.seed(1234)
     xyz1 = np.random.uniform(low=2./3., high=3./2., size=[3])
     xyz2 = np.random.uniform(low=-0.2, high=0.2, size=[3])
        

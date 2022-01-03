@@ -263,16 +263,18 @@ class ClassificationGraphNN(torch.nn.Module):
                                                 torch.nn.Dropout(self.dropout))
             '''
             self.graph_mlp = Seq(
-                                 BasicConv([opt.in_channels, 16], 'relu', norm, True),
-                                 BasicConv([16, 32], 'relu', norm, True),
-                                 BasicConv([32, 16], 'relu', norm, True),
+                                 BasicConv([opt.in_channels, 16], 'relu', None, True),
+                                 #BasicConv([16, 16], 'relu', norm, True),
+                                 #BasicConv([16, 16], 'relu', norm, True),
                                  torch.nn.Dropout(p=opt.graph_dropout),
-                                 BasicConv([16,self.graph_feats], None, None, True)
+                                 BasicConv([16,self.graph_feats], None, None, False)
             )
         
-            self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
+            #self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
+            self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
         else:
-            self.head = MessagePassing(opt.in_channels, opt.in_channels, int(0.5*channels), channels, norm)
+            #self.head = MessagePassing(opt.in_channels, opt.in_channels, int(0.5*channels), channels, norm)
+            self.head = MessagePassing(opt.in_channels, 2*opt.in_channels, int(0.5*channels), channels, norm)
         self.knn = DenseKnnGraph(k)
 
         # 6 -> 64 -> 128 -> 256 features per node
@@ -300,7 +302,9 @@ class ClassificationGraphNN(torch.nn.Module):
                 edge_index = self.knn(inputs[:, 0:3])
         gh_i = batched_index_select(edge_features, edge_index[1])
         gh_j = batched_index_select(edge_features, edge_index[0])
-        e_ij = gh_i-gh_j
+        diff_ij = gh_i-gh_j
+        e_ij = torch.cat((gh_i,diff_ij), dim=1)
+        #e_ij = diff_ij
         h_1, e_1, edge_index = self.head(inputs, e_ij, edge_index)
         feats = [h_1]
         feats_edges = [e_1]
