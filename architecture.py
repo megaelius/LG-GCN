@@ -247,7 +247,7 @@ class GraphFeatures(torch.nn.Module):
 
         self.fusion = BasicConv([2*latent_dim,output_dim], None, None, False)
 
-    def forward(x):
+    def forward(self,x):
         local_feat = feat_mlp(x)
         global_feat = torch.max_pool2d(local_feat, kernel_size=[out.shape[2], out.shape[3]])
         global_feat = torch.repeat_interleave(global_feat, repeats=feats.shape[2], dim=2)
@@ -384,7 +384,6 @@ class ClassificationGraphNN2(torch.nn.Module):
             edge_features = inputs
         elif self.knn_criterion == 'MLP':
             #inputs shape is B,3,N_points,1
-            print(inputs)
             edge_features = self.graph_mlp(inputs)
             if use_mlp_graph:
                 edge_index = self.knn(edge_features)
