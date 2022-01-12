@@ -251,7 +251,7 @@ class GraphFeatures(torch.nn.Module):
         local_feat = self.feat_mlp(x)
         global_feat = torch.max_pool2d(local_feat, kernel_size=[local_feat.shape[2], local_feat.shape[3]])
         global_feat_repeated = torch.repeat_interleave(global_feat, repeats=local_feat.shape[2], dim=2)
-        print(local_feat.shape, global_feat_repeated.shape)
+        #print(local_feat.shape, global_feat_repeated.shape)
         feat = torch.cat((local_feat, global_feat_repeated), dim=1)
         return self.fusion(feat)
 
