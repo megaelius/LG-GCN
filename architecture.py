@@ -337,7 +337,7 @@ class ClassificationGraphNN(torch.nn.Module):
 
 class ClassificationGraphNN2(torch.nn.Module):
     def __init__(self, opt):
-        super(ClassificationGraphNN, self).__init__()
+        super(ClassificationGraphNN2, self).__init__()
         channels = opt.n_filters
         k = opt.k
         act = opt.act
