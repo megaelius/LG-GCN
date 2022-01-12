@@ -242,7 +242,7 @@ class CustomDenseGCN(torch.nn.Module):
 
 class GraphFeatures(torch.nn.Module):
     def __init__(self, input_dims, latent_dim, output_dim):
-        super(MessagePassing, self).__init__()
+        super(GraphFeatures, self).__init__()
         self.feat_mlp = BasicConv([input_dims, latent_dim], 'relu', None, True)
 
         self.fusion = BasicConv([2*latent_dim,output_dim], None, None, False)
