@@ -384,6 +384,7 @@ class ClassificationGraphNN2(torch.nn.Module):
             edge_features = inputs
         elif self.knn_criterion == 'MLP':
             #inputs shape is B,3,N_points,1
+            print(inputs)
             edge_features = self.graph_mlp(inputs)
             if use_mlp_graph:
                 edge_index = self.knn(edge_features)
