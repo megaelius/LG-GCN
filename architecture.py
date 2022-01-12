@@ -241,11 +241,17 @@ class CustomDenseGCN(torch.nn.Module):
         #return self.prediction(feats[-1]).squeeze(-1)
 
 class GraphFeatures(torch.nn.Module):
-    def __init__(self, input_dims, latent_dim, output_dim):
+    def __init__(self, input_dims, output_dim):
         super(GraphFeatures, self).__init__()
-        self.feat_mlp = BasicConv([input_dims, latent_dim], 'relu', None, True)
+        self.feat_mlp = Seq(
+                             BasicConv([input_dims, 16], 'relu', None, True),
+                             BasicConv([16, 64], 'relu', None, True),
+        )
 
-        self.fusion = BasicConv([2*latent_dim,output_dim], None, None, False)
+        self.fusion = Seq(
+                             BasicConv([2*64, 16], 'relu', None, True),
+                             BasicConv([16, output_dim], None, None, False),
+        )
 
     def forward(self,x):
         local_feat = self.feat_mlp(x)
@@ -358,7 +364,7 @@ class ClassificationGraphNN2(torch.nn.Module):
                                                 torch.nn.Linear(32,opt.in_channels),
                                                 torch.nn.Dropout(self.dropout))
             '''
-            self.graph_mlp = GraphFeatures(opt.in_channels, 16, opt.graph_feats)
+            self.graph_mlp = GraphFeatures(opt.in_channels, opt.graph_feats)
 
             #self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
             self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
