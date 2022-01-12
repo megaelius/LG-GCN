@@ -13,7 +13,7 @@ import torch_geometric.transforms as T
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 from config import OptInit
-from architecture import ClassificationGraphNN
+from architecture import ClassificationGraphNN, ClassificationGraphNN2
 from utils.ckpt_util import load_pretrained_models, load_pretrained_optimizer, save_checkpoint
 from utils.metrics import AverageMeter
 import logging
@@ -51,7 +51,7 @@ def scaledstressloss(feats1,feats2):
     f2 = feats2.transpose(2, 1).squeeze(-1)
     d1squared = pairwise_distance(f1)
     d2squared = pairwise_distance(f2)
-    #We add 1 to avoid problems with squared root gradients, this doesn't affect as we compute the difference 
+    #We add 1 to avoid problems with squared root gradients, this doesn't affect as we compute the difference
     #d1 = torch.sqrt(d1squared/f1.shape[2] + 1)
     #d2 = torch.sqrt(d2squared/f2.shape[2] + 1)
     d1 = torch.sqrt(d1squared + 1)
@@ -113,7 +113,7 @@ def train(model, train_loader, optimizer, criterion, opt, cur_rank):
             target_np = gt.cpu().numpy()
             pred = out.max(dim=1)[1]
             pred_np = pred.cpu().numpy()
-            
+
             targets += list(target_np.ravel())
             preds += list(pred_np.ravel())
 
@@ -154,10 +154,10 @@ def test(model, loader, criterion, opt, cur_rank):
 
             target_np = gt.cpu().numpy()
             pred_np = pred.cpu().numpy()
-            
+
             targets += list(target_np.ravel())
             preds += list(pred_np.ravel())
-            
+
     acc = accuracy_score(targets, preds)
 
     logging.info('TEST Epoch: [{}]\t Acc: {:.4f}\t'.format(opt.epoch, acc))
@@ -171,7 +171,7 @@ def epochs(opt):
     #test_dataset = GeoData.ModelNet(opt.data_dir, name = '40', train=False, pre_transform=T.NormalizeScale())
     #test_sampler = DistributedSampler(test_dataset, shuffle=False, seed=opt.seed)
     #test_loader = DenseDataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, sampler = test_sampler, num_workers=opt.n_gpus)
-    
+
     random.seed(opt.seed)
     np.random.seed(opt.seed)
     torch.manual_seed(opt.seed)
@@ -184,7 +184,7 @@ def epochs(opt):
         train_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=False, generator= train_generator, sampler = train_sampler, num_workers=opt.n_gpus, drop_last=False,worker_init_fn=seed_worker)
     else:
         train_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, generator=train_generator, num_workers=4, drop_last=False,worker_init_fn=seed_worker)
-    
+
     test_dataset = ModelNet40(1024, 'test')
     test_generator = torch.Generator()
     test_generator.manual_seed(opt.seed)
@@ -193,7 +193,7 @@ def epochs(opt):
         test_loader = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, generator = test_generator, sampler = test_sampler, num_workers=opt.n_gpus, drop_last=False,worker_init_fn=seed_worker)
     else:
         test_loader = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, generator=test_generator, num_workers=4, drop_last=False,worker_init_fn=seed_worker)
-    
+
     LABELS = [
     'airplane', 'bathtub', 'bed', 'bench', 'bookshelf', 'bottle', 'bowl', 'car',
     'chair', 'cone', 'cup', 'curtain', 'desk', 'door', 'dresser', 'flower_pot',
@@ -210,9 +210,9 @@ def epochs(opt):
 
     logging.info('===> Loading the network ...')
     if opt.n_gpus > 1:
-        model = DistributedDataParallel(ClassificationGraphNN(opt).to(cur_rank),device_ids=[cur_rank], output_device=cur_rank,broadcast_buffers=False).to(cur_rank)
+        model = DistributedDataParallel(ClassificationGraphNN2(opt).to(cur_rank),device_ids=[cur_rank], output_device=cur_rank,broadcast_buffers=False).to(cur_rank)
     else:
-        model = ClassificationGraphNN(opt).to(cur_rank)
+        model = ClassificationGraphNN2(opt).to(cur_rank)
     logging.info('===> loading pre-trained ...')
     model, opt.best_value, opt.epoch = load_pretrained_models(model, opt.pretrained_model, opt.phase)
     logging.info(model)

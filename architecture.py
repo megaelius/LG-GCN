@@ -175,7 +175,7 @@ class CustomDenseGCN(torch.nn.Module):
         # 6 -> 64 -> 128 -> 256 features per node
         self.backbone = Seq(*[MessagePassing(channels*i, channels*i, int(0.75*channels*i), channels*(i+1), norm)
                               for i in range(1,self.n_blocks)])
-        
+
         fusion_dims = int(sum([channels*(i+1) for i in range(self.n_blocks)]))
         '''
         self.fusion_block = Seq(
@@ -190,7 +190,7 @@ class CustomDenseGCN(torch.nn.Module):
                               torch.nn.Linear(256,opt.n_classes)
                               )
         '''
-        
+
         self.fusion_block = BasicConv([fusion_dims, 64], act, norm, bias)
         self.prediction = Seq(*[BasicConv([fusion_dims+64, 256], act, norm, bias),
                                 BasicConv([256, 128], act, norm, bias),
@@ -232,14 +232,29 @@ class CustomDenseGCN(torch.nn.Module):
             h_i, e_i, edge_index = self.backbone[i](feats[-1],feats_edges[-1], edge_index)
             feats.append(h_i)
             feats_edges.append(e_i)
-    
+
         #Fusion block
         feats = torch.cat(feats, dim=1)
         fusion = torch.max_pool2d(self.fusion_block(feats), kernel_size=[feats.shape[2], feats.shape[3]])
         fusion = torch.repeat_interleave(fusion, repeats=feats.shape[2], dim=2)
         return self.prediction(torch.cat((fusion, feats), dim=1)).squeeze(-1)
         #return self.prediction(feats[-1]).squeeze(-1)
-        
+
+class GraphFeatures(torch.nn.Module):
+    def __init__(self, input_dims, latent_dim, output_dim):
+        super(MessagePassing, self).__init__()
+        self.feat_mlp = BasicConv([input_dims, latent_dim], 'relu', None, True)
+
+        self.fusion = BasicConv([2*latent_dim,output_dim], None, None, False)
+
+    def forward(x):
+        local_feat = feat_mlp(x)
+        global_feat = torch.max_pool2d(local_feat, kernel_size=[out.shape[2], out.shape[3]])
+        global_feat = torch.repeat_interleave(global_feat, repeats=feats.shape[2], dim=2)
+        feat = torch.cat((local_feat, global_feat), dim=1)
+        return self.fusion(feat)
+
+
 class ClassificationGraphNN(torch.nn.Module):
     def __init__(self, opt):
         super(ClassificationGraphNN, self).__init__()
@@ -269,7 +284,7 @@ class ClassificationGraphNN(torch.nn.Module):
                                  torch.nn.Dropout(p=opt.graph_dropout),
                                  BasicConv([16,self.graph_feats], None, None, False)
             )
-        
+
             #self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
             self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
         else:
@@ -280,9 +295,9 @@ class ClassificationGraphNN(torch.nn.Module):
         # 6 -> 64 -> 128 -> 256 features per node
         self.backbone = Seq(*[MessagePassing(channels*i, channels*i, int(0.75*channels*i), channels*(i+1), norm)
                               for i in range(1,self.n_blocks)])
-        
+
         fusion_dims = int(sum([channels*(i+1) for i in range(self.n_blocks)]))
-        
+
         self.fusion_block = BasicConv([fusion_dims, 512], act, norm, bias)
         self.prediction = Seq(*[BasicConv([512, 256], act, norm, bias),
                                 BasicConv([256, 128], act, norm, bias),
@@ -312,7 +327,81 @@ class ClassificationGraphNN(torch.nn.Module):
             h_i, e_i, edge_index = self.backbone[i](feats[-1],feats_edges[-1], edge_index)
             feats.append(h_i)
             feats_edges.append(e_i)
-    
+
+        #Fusion block
+        feats = torch.cat(feats, dim=1)
+        fusion = torch.max_pool2d(self.fusion_block(feats), kernel_size=[feats.shape[2], feats.shape[3]])
+
+        return self.prediction(fusion).squeeze(-1), edge_features
+        #return self.prediction(feats[-1]).squeeze(-1)
+
+class ClassificationGraphNN2(torch.nn.Module):
+    def __init__(self, opt):
+        super(ClassificationGraphNN, self).__init__()
+        channels = opt.n_filters
+        k = opt.k
+        act = opt.act
+        norm = opt.norm
+        bias = opt.bias
+        self.dropout = opt.dropout
+        self.n_blocks = opt.n_blocks
+        self.graph = opt.graph
+        self.knn_criterion = opt.knn_criterion
+        self.graph_feats = opt.graph_feats
+        if self.knn_criterion == 'MLP':
+            #self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,opt.in_channels))
+            '''
+            self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(opt.in_channels,32),
+                                                torch.nn.ReLU(),
+                                                torch.nn.Dropout(self.dropout),
+                                                torch.nn.Linear(32,opt.in_channels),
+                                                torch.nn.Dropout(self.dropout))
+            '''
+            self.graph_mlp = GraphFeatures(opt.in_channels, 16, opt.graph_feats)
+
+            #self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
+            self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
+        else:
+            #self.head = MessagePassing(opt.in_channels, opt.in_channels, int(0.5*channels), channels, norm)
+            self.head = MessagePassing(opt.in_channels, 2*opt.in_channels, int(0.5*channels), channels, norm)
+        self.knn = DenseKnnGraph(k)
+
+        # 6 -> 64 -> 128 -> 256 features per node
+        self.backbone = Seq(*[MessagePassing(channels*i, channels*i, int(0.75*channels*i), channels*(i+1), norm)
+                              for i in range(1,self.n_blocks)])
+
+        fusion_dims = int(sum([channels*(i+1) for i in range(self.n_blocks)]))
+
+        self.fusion_block = BasicConv([fusion_dims, 512], act, norm, bias)
+        self.prediction = Seq(*[BasicConv([512, 256], act, norm, bias),
+                                BasicConv([256, 128], act, norm, bias),
+                                torch.nn.Dropout(p=opt.dropout),
+                                BasicConv([128, opt.n_classes], None, None, bias)])
+
+    def forward(self, inputs, use_mlp_graph = True):
+        if self.knn_criterion == 'xyz':
+            edge_index = self.knn(inputs[:, 0:3])
+            edge_features = inputs
+        elif self.knn_criterion == 'MLP':
+            #inputs shape is B,3,N_points,1
+            edge_features = self.graph_mlp(inputs)
+            if use_mlp_graph:
+                edge_index = self.knn(edge_features)
+            else:
+                edge_index = self.knn(inputs[:, 0:3])
+        gh_i = batched_index_select(edge_features, edge_index[1])
+        gh_j = batched_index_select(edge_features, edge_index[0])
+        diff_ij = gh_i-gh_j
+        e_ij = torch.cat((gh_i,diff_ij), dim=1)
+        #e_ij = diff_ij
+        h_1, e_1, edge_index = self.head(inputs, e_ij, edge_index)
+        feats = [h_1]
+        feats_edges = [e_1]
+        for i in range(self.n_blocks-1):
+            h_i, e_i, edge_index = self.backbone[i](feats[-1],feats_edges[-1], edge_index)
+            feats.append(h_i)
+            feats_edges.append(e_i)
+
         #Fusion block
         feats = torch.cat(feats, dim=1)
         fusion = torch.max_pool2d(self.fusion_block(feats), kernel_size=[feats.shape[2], feats.shape[3]])
