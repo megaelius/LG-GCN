@@ -249,8 +249,8 @@ class GraphFeatures(torch.nn.Module):
 
     def forward(self,x):
         local_feat = self.feat_mlp(x)
-        global_feat = torch.max_pool2d(local_feat, kernel_size=[out.shape[2], out.shape[3]])
-        global_feat = torch.repeat_interleave(global_feat, repeats=feats.shape[2], dim=2)
+        global_feat = torch.max_pool2d(local_feat, kernel_size=[local_feat.shape[2], local_feat.shape[3]])
+        global_feat = torch.repeat_interleave(global_feat, repeats=global_feat.shape[2], dim=2)
         feat = torch.cat((local_feat, global_feat), dim=1)
         return self.fusion(feat)
 
