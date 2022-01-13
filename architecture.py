@@ -244,12 +244,12 @@ class GraphFeatures(torch.nn.Module):
     def __init__(self, input_dims, output_dim):
         super(GraphFeatures, self).__init__()
         self.feat_mlp = Seq(
-                             BasicConv([input_dims, 16], 'relu', None, True),
-                             BasicConv([16, 64], 'relu', None, True),
+                             BasicConv([input_dims, 16], 'relu', 'batch', True),
+                             BasicConv([16, 64], 'relu', 'batch', True),
         )
 
         self.fusion = Seq(
-                             BasicConv([2*64, 16], 'relu', None, True),
+                             BasicConv([2*64, 16], 'relu', 'batch', True),
                              BasicConv([16, output_dim], None, None, False),
         )
 
