@@ -210,9 +210,9 @@ def epochs(opt):
 
     logging.info('===> Loading the network ...')
     if opt.n_gpus > 1:
-        model = DistributedDataParallel(ClassificationGraphNN2(opt).to(cur_rank),device_ids=[cur_rank], output_device=cur_rank,broadcast_buffers=False).to(cur_rank)
+        model = DistributedDataParallel(ClassificationGraphNN(opt).to(cur_rank),device_ids=[cur_rank], output_device=cur_rank,broadcast_buffers=False).to(cur_rank)
     else:
-        model = ClassificationGraphNN2(opt).to(cur_rank)
+        model = ClassificationGraphNN(opt).to(cur_rank)
     logging.info('===> loading pre-trained ...')
     model, opt.best_value, opt.epoch = load_pretrained_models(model, opt.pretrained_model, opt.phase)
     logging.info(model)
