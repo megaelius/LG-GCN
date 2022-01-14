@@ -249,8 +249,7 @@ class GraphFeatures(torch.nn.Module):
         )
 
         self.fusion = Seq(
-                             BasicConv([2*64, 16], 'relu', 'batch', True),
-                             BasicConv([16, output_dim], None, None, False),
+                             BasicConv([2*64, output_dim], None, None, False),
         )
 
     def forward(self,x):
