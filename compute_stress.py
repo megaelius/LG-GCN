@@ -31,7 +31,7 @@ def scaled_stress(feats1,feats2):
     f1 = feats1.transpose(2, 1).squeeze(-1)
     f2 = feats2.transpose(2, 1).squeeze(-1)
     d1squared = pairwise_distance(f1)
-    d2squared = pairwise_distance(f2) 
+    d2squared = pairwise_distance(f2)
     #d1 = torch.sqrt(d1squared/f1.shape[2] + 1)
     #d2 = torch.sqrt(d2squared/f2.shape[2] + 1)
     d1 = torch.sqrt(d1squared)
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     dataset = ModelNet40(1024,'test')
     knn = DenseKnnGraph()
     device = torch.device('cpu')
-    opt = SimpleNamespace(n_filters = 64, 
+    opt = SimpleNamespace(n_filters = 64,
                         k= 16,
                         act='relu',
                         norm = 'batch',
@@ -68,7 +68,7 @@ if __name__ == '__main__':
                         graph = 'KNN',
                         knn_criterion = 'MLP',
                         graph_feats = args.d,
-                        in_channels = 3,
+                        in_channels = 12,
                         graph_dropout = 0,
                         n_classes = 40)
 
@@ -76,7 +76,7 @@ if __name__ == '__main__':
     state_dict = torch.load(args.weights, map_location=device)
     model.load_state_dict(state_dict['state_dict'])
     model.eval()
-    
+
     total_stress = 0
     total_average_shortest_path = 0
     total_percentage_shared_edges = 0
@@ -93,7 +93,7 @@ if __name__ == '__main__':
             knn_index_xyz = knn(points)
             edges_mlp = dense_knn_to_set(knn_index_mlp)
             edges_xyz = dense_knn_to_set(knn_index_xyz)
-            
+
             #Compute stress for this pointcloud
             pc_stress = scaled_stress(points,edge_features)
             total_stress += pc_stress
