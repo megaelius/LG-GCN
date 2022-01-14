@@ -68,7 +68,7 @@ if __name__ == '__main__':
                         graph = 'KNN',
                         knn_criterion = 'MLP',
                         graph_feats = args.d,
-                        in_channels = 12,
+                        in_channels = 3,
                         graph_dropout = 0,
                         n_classes = 40)
 
