@@ -31,7 +31,7 @@ def scaled_stress(feats1,feats2):
     f1 = feats1.transpose(2, 1).squeeze(-1)
     f2 = feats2.transpose(2, 1).squeeze(-1)
     d1squared = pairwise_distance(f1)
-    d2squared = pairwise_distance(f2) 
+    d2squared = pairwise_distance(f2)
     #d1 = torch.sqrt(d1squared/f1.shape[2] + 1)
     #d2 = torch.sqrt(d2squared/f2.shape[2] + 1)
     d1 = torch.sqrt(d1squared)
@@ -50,9 +50,9 @@ def scaled_stress(feats1,feats2):
     return torch.sqrt(flat_scaled_se.sum(dim=1).sum(dim=0)/2)
 
 if __name__ == '__main__':
-    #parser = argparse.ArgumentParser()
-    #parser.add_argument('--phase', default='test', type=str, help='train or test(default)')
-    #args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--run', default=1, type=int, help='run')
+    args = parser.parse_args()
 
     dataset = ModelNet40(1024,'test')
     knn = DenseKnnGraph()
@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     d_graphs = [1,2,3,6,9,12]
     for d in d_graphs:
-        opt = SimpleNamespace(n_filters = 64, 
+        opt = SimpleNamespace(n_filters = 64,
                             k= 16,
                             act='relu',
                             norm = 'batch',
@@ -75,10 +75,13 @@ if __name__ == '__main__':
                             n_classes = 40)
 
         model = ClassificationGraphNN(opt)
-        state_dict = torch.load(f'weights/MLP_3_16_{d}_best.pth', map_location=device)
+        if args.run == 1:
+            state_dict = torch.load(f'weights/MLP_3_16_{d}_best.pth', map_location=device)
+        else:
+            state_dict = torch.load(f'weights/MLP_3_16_{d}_run{args.run}_best.pth', map_location=device)
         model.load_state_dict(state_dict['state_dict'])
         model.eval()
-        
+
         total_stress = 0
         total_average_shortest_path = 0
         total_percentage_shared_edges = 0
@@ -95,7 +98,7 @@ if __name__ == '__main__':
                 knn_index_xyz = knn(points)
                 edges_mlp = dense_knn_to_set(knn_index_mlp)
                 edges_xyz = dense_knn_to_set(knn_index_xyz)
-                
+
                 #Compute stress for this pointcloud
                 pc_stress = scaled_stress(points,edge_features)
                 total_stress += pc_stress
@@ -110,11 +113,11 @@ if __name__ == '__main__':
                 DG_xyz = nx.DiGraph()
                 DG_xyz.add_nodes_from(nodelist)
                 DG_xyz.add_edges_from(edges_xyz)
-                
+
                 #Number of Weakly connected components
                 cc = nx.number_weakly_connected_components(DG_mlp)
                 total_weakly_conected_components += cc
-                
+
                 if cc==1:
                     #Compute average shortest path
                     asp_mlp = nx.average_shortest_path_length(DG_mlp)
@@ -127,7 +130,11 @@ if __name__ == '__main__':
                 total_percentage_shared_edges +=pse
 
                 count += 1
-        with open(f'results_MLP_3_16_{d}.txt','w') as f:
+        if args.run == 1:
+            filename = f'results_MLP_3_16_{d}.txt'
+        else:
+            filename = f'results_MLP_3_16_{d}_run{args.run}.txt'
+        with open(filename,'w') as f:
             f.write(f'MLP_3_16_{d}_best.pth:\n')
             f.write(f'Average Stress: {total_stress/count}\n')
             f.write(f'Average shortest path length: {total_average_shortest_path/count_sp}\n')
