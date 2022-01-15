@@ -1,0 +1,5 @@
+MLP_3_16_3_best.pth:
+Average Stress: 0.5795542001724243
+Average shortest path length: 12.002217447151097
+Average percentage of shared edges with regular knn: 0.7789896877954468
+Average number of weakly connected components 1.0076985413290114
