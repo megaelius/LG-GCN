@@ -91,7 +91,7 @@ if __name__ == '__main__':
 
             count += 1
 
-    filename = f'results/results_baseline.txt'
+    filename = 'results/results_baseline.txt'
     with open(filename,'w') as f:
         f.write(f'baseline:\n')
         f.write(f'Average shortest path length: {total_average_shortest_path/count_sp}\n')
