@@ -1,0 +1,3 @@
+baseline:
+Average shortest path length: 11.748615084025635
+Average number of weakly connected components 1.0133711507293355
