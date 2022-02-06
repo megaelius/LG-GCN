@@ -281,7 +281,7 @@ class ClassificationGraphNN(torch.nn.Module):
                 self.graph_mlp = Seq(
                                      BasicConv([opt.in_channels,self.graph_feats], None, None, False)
                                      )
-	        elif self.graph_layers >= 2:
+            elif self.graph_layers >= 2:
                 layers = [BasicConv([opt.in_channels, self.graph_hidden], 'relu', None, True)]
                 for i in range(self.graph_layers-2):
                     layers.append(BasicConv([opt.graph_hidden, self.graph_hidden], 'relu', None, True))
