@@ -274,8 +274,8 @@ class ClassificationGraphNN(torch.nn.Module):
         self.graph = opt.graph
         self.knn_criterion = opt.knn_criterion
         self.graph_feats = opt.graph_feats
-	    self.graph_layers = opt.graph_layers
-	    self.graph_hidden = opt.graph_hidden
+        self.graph_layers = opt.graph_layers
+        self.graph_hidden = opt.graph_hidden
         if self.knn_criterion == 'MLP':
             if self.graph_layers == 1:
     		    self.graph_mlp = Seq(
