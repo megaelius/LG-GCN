@@ -38,7 +38,7 @@ class OptInit:
         parser.add_argument('--save_freq', default=1, type=int, help='save model per num of epochs')
         parser.add_argument('--iter', default=0, type=int, help='number of iteration to start')
         parser.add_argument('--lr_adjust_freq', default=20, type=int, help='decay lr after certain number of epochs')
-        parser.add_argument('--lr', default=1e-4, type=float, help='initial learning rate')
+        parser.add_argument('--lr', default=1e-3, type=float, help='initial learning rate')
         parser.add_argument('--lr_decay_rate', default=0.5, type=float, help='learning rate decay')
         parser.add_argument('--print_freq', default=100, type=int, help='print frequency of training (default: 100)')
         parser.add_argument('--eval_freq', default=1, type=int,
@@ -63,10 +63,12 @@ class OptInit:
         parser.add_argument('--n_filters', default=64, type=int, help='number of channels of deep features')
         parser.add_argument('--n_blocks', default=4, type=int, help='number of basic blocks')
         parser.add_argument('--dropout', default=0.3, type=float, help='ratio of dropout')
-        parser.add_argument('--graph_dropout', default=0.3, type=float, help='ratio of dropout of the graph mlp')
-        parser.add_argument('--graph_l2reg', default=0.0005, type=float, help='ratio of dropout of the graph mlp')
-        parser.add_argument('--graph_feats', default=8, type=int, help='Number of output features of the MLP that is used to learn the graph features.')
-        parser.add_argument('--d2d_weight', default=0.005, type=float, help='distance to distance loss weight')
+        parser.add_argument('--graph_dropout', default=0, type=float, help='ratio of dropout of the graph mlp')
+        parser.add_argument('--graph_l2reg', default=0, type=float, help='ratio of dropout of the graph mlp')
+        parser.add_argument('--graph_feats', default=3, type=int, help='Number of output features of the MLP that is used to learn the graph features.')
+        parser.add_argument('--d2d_weight', default=0, type=float, help='distance to distance loss weight')
+        parser.add_argument('--graph_hidden', default=16, type=int, help='Number of features in a hidden layer')
+        parser.add_argument('--graph_layers', default=2, type=int, help='Number of layers in the graph_mlp')
 
         args = parser.parse_args()
 
@@ -171,6 +173,3 @@ class OptInit:
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-
-
-

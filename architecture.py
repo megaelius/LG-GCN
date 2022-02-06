@@ -274,27 +274,20 @@ class ClassificationGraphNN(torch.nn.Module):
         self.graph = opt.graph
         self.knn_criterion = opt.knn_criterion
         self.graph_feats = opt.graph_feats
-	self.graph_layers = opt.graph_layers
-	self.graph_hidden = opt.graph_hidden
+	    self.graph_layers = opt.graph_layers
+	    self.graph_hidden = opt.graph_hidden
         if self.knn_criterion == 'MLP':
-	    if self.graph_layers == 2:
-            	self.graph_mlp = Seq(
-                                 BasicConv([opt.in_channels, self.graph_hidden], 'relu', None, True),
-                                 torch.nn.Dropout(p=opt.graph_dropout),
-                                 BasicConv([self.graph_hidden,self.graph_feats], None, None, False)
-            	)
-	    elif self.graph_layers == 1:
-		self.graph_mlp = Seq(
-                                 BasicConv([opt.in_channels,self.graph_feats], None, None, F$
+            if self.graph_layers == 1:
+    		    self.graph_mlp = Seq(
+                                     BasicConv([opt.in_channels,self.graph_feats], None, None, False)
                 )
-	    elif self.graph_layers == 3:
-		self.graph_mlp = Seq(
-                                 BasicConv([opt.in_channels, self.graph_hidden], 'relu', None,$
-                                 BasicConv([self.graph_hidden, self.graph_hidden], 'relu', None, True),
-                                 torch.nn.Dropout(p=opt.graph_dropout),
-                                 BasicConv([self.graph_hidden,self.graph_feats], None, None, F$
-                )
-
+	        elif self.graph_layers >= 2:
+                layers = [BasicConv([opt.in_channels, self.graph_hidden], 'relu', None, True)]
+                for i in range(self.graph_layers-2):
+                    layers.append(BasicConv([opt.graph_hidden, self.graph_hidden], 'relu', None, True))
+                layers.append(torch.nn.Dropout(p=opt.graph_dropout))
+                layers.append(BasicConv([self.graph_hidden,self.graph_feats], None, None, False))
+            	self.graph_mlp = Seq(*layers)
 
             #self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
             self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
