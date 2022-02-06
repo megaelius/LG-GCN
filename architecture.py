@@ -287,7 +287,7 @@ class ClassificationGraphNN(torch.nn.Module):
                     layers.append(BasicConv([opt.graph_hidden, self.graph_hidden], 'relu', None, True))
                 layers.append(torch.nn.Dropout(p=opt.graph_dropout))
                 layers.append(BasicConv([self.graph_hidden,self.graph_feats], None, None, False))
-            	self.graph_mlp = Seq(*layers)
+                self.graph_mlp = Seq(*layers)
 
             #self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
             self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
