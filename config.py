@@ -27,10 +27,10 @@ class OptInit:
         parser.add_argument('--root_dir', type=str, default='log', help='the dir of all experiment results')
 
         # ----------------- Dataset related
-        parser.add_argument('--data_dir', type=str, default='/data/deepgcn/S3DIS',
+        parser.add_argument('--data_dir', type=str, default='data/ModelNet',
                             help="data dir, will download dataset here automatically")
         parser.add_argument('--area', type=int, default=5, help='the cross validated area of S3DIS')
-        parser.add_argument('--in_channels', default=6, type=int, help='the channel size of input point cloud ')
+        parser.add_argument('--in_channels', default=3, type=int, help='the channel size of input point cloud ')
 
         # ----------------- Training related
         parser.add_argument('--batch_size', default=16, type=int, help='mini-batch size (default:16)')
