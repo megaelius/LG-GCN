@@ -274,22 +274,27 @@ class ClassificationGraphNN(torch.nn.Module):
         self.graph = opt.graph
         self.knn_criterion = opt.knn_criterion
         self.graph_feats = opt.graph_feats
+	self.graph_layers = opt.graph_layers
+	self.graph_hidden = opt.graph_hidden
         if self.knn_criterion == 'MLP':
-            #self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,opt.in_channels))
-            '''
-            self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(opt.in_channels,32),
-                                                torch.nn.ReLU(),
-                                                torch.nn.Dropout(self.dropout),
-                                                torch.nn.Linear(32,opt.in_channels),
-                                                torch.nn.Dropout(self.dropout))
-            '''
-            self.graph_mlp = Seq(
-                                 BasicConv([opt.in_channels, 16], 'relu', None, True),
-                                 #BasicConv([16, 16], 'relu', norm, True),
-                                 #BasicConv([16, 16], 'relu', norm, True),
+	    if self.graph_layers == 2:
+            	self.graph_mlp = Seq(
+                                 BasicConv([opt.in_channels, self.graph_hidden], 'relu', None, True),
                                  torch.nn.Dropout(p=opt.graph_dropout),
-                                 BasicConv([16,self.graph_feats], None, None, False)
-            )
+                                 BasicConv([self.graph_hidden,self.graph_feats], None, None, False)
+            	)
+	    elif self.graph_layers == 1:
+		self.graph_mlp = Seq(
+                                 BasicConv([opt.in_channels,self.graph_feats], None, None, F$
+                )
+	    elif self.graph_layers == 3:
+		self.graph_mlp = Seq(
+                                 BasicConv([opt.in_channels, self.graph_hidden], 'relu', None,$
+                                 BasicConv([self.graph_hidden, self.graph_hidden], 'relu', None, True),
+                                 torch.nn.Dropout(p=opt.graph_dropout),
+                                 BasicConv([self.graph_hidden,self.graph_feats], None, None, F$
+                )
+
 
             #self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
             self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
