@@ -19,6 +19,7 @@ import logging
 from tqdm import tqdm
 from parallel_wrapper import launch
 import comm
+from gcn_lib.dense import pairwise_distance
 import wandb
 
 def scaledstressloss(feats1,feats2):
