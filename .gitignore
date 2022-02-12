@@ -29,4 +29,5 @@ weights/
 log/
 log_ModelNet40/
 log_ScanObjectNN/
+log_S3DIS/
 wandb/
