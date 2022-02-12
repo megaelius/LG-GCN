@@ -145,7 +145,6 @@ class CustomDenseGCN(torch.nn.Module):
         self.n_blocks = opt.n_blocks
         self.graph = opt.graph
         self.knn_criterion = opt.knn_criterion
-        self.mlp_conn = opt.mlp_conn
         self.graph_feats = opt.graph_feats
         self.graph_layers = opt.graph_layers
         self.graph_hidden = opt.graph_hidden
