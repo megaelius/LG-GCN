@@ -142,9 +142,6 @@ class CustomDenseGCN(torch.nn.Module):
         norm = opt.norm
         bias = opt.bias
         self.dropout = opt.dropout
-        epsilon = opt.epsilon
-        conv = opt.conv
-        c_growth = channels
         self.n_blocks = opt.n_blocks
         self.graph = opt.graph
         self.knn_criterion = opt.knn_criterion
