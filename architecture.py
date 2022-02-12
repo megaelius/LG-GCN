@@ -209,7 +209,7 @@ class CustomDenseGCN(torch.nn.Module):
                 edge_index = self.knn(inputs[:, 0:3])
         gh_i = batched_index_select(edge_features, edge_index[1])
         gh_j = batched_index_select(edge_features, edge_index[0])
-        e_ij = gh_i-gh_j
+        diff_ij = gh_i-gh_j
         e_ij = torch.cat((gh_i,diff_ij), dim=1)
         h_1, e_1, edge_index = self.head(inputs, e_ij, edge_index)
         feats = [h_1]
