@@ -194,8 +194,9 @@ def epochs(opt):
         '''
 
         opt.epoch += 1
-        train_sampler.set_epoch(opt.epoch)
-        test_sampler.set_epoch(opt.epoch)
+        if opt.n_gpus > 1:
+            train_sampler.set_epoch(opt.epoch)
+            test_sampler.set_epoch(opt.epoch)
         logging.info('Epoch:{}'.format(opt.epoch))
         train_loss, train_d2d_loss, train_ce_loss = train(model, train_loader, optimizer, criterion, opt, cur_rank)
         if opt.epoch % opt.eval_freq == 0 and opt.eval_freq != -1:
