@@ -52,7 +52,7 @@ def train(model, train_loader, optimizer, criterion, opt, cur_rank):
                 .format(opt.epoch, opt.iter, i + 1, len(train_loader))
             tqdm_loader.set_description(desc)
 
-            inputs = torch.cat((data.pos.transpose(2, 1).unsqueeze(3), data.x.transpose(2, 1).unsqueeze(3)), 1)
+            inputs = torch.cat((data.pos.transpose(2, 1).unsqueeze(3), data.x.transpose(2, 1).unsqueeze(3)), 1).to(opt.device)
             gt = data.y.to(opt.device)
             # ------------------ zero, output, loss
             optimizer.zero_grad()
