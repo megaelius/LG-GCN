@@ -149,20 +149,27 @@ class CustomDenseGCN(torch.nn.Module):
         self.graph = opt.graph
         self.knn_criterion = opt.knn_criterion
         self.mlp_conn = opt.mlp_conn
+        self.graph_feats = opt.graph_feats
+        self.graph_layers = opt.graph_layers
+        self.graph_hidden = opt.graph_hidden
         if self.knn_criterion == 'MLP':
-            #self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(9,opt.in_channels))
-            '''
-            self.graph_mlp = torch.nn.Sequential(torch.nn.Linear(opt.in_channels,32),
-                                                torch.nn.ReLU(),
-                                                torch.nn.Dropout(self.dropout),
-                                                torch.nn.Linear(32,opt.in_channels),
-                                                torch.nn.Dropout(self.dropout))
-            '''
-            self.graph_mlp = Seq(
-                                 BasicConv([opt.in_channels, 4], 'relu', norm, True),
-                                 BasicConv([4,3], None, None, True)
-            )
-        self.head = MessagePassing(opt.in_channels, 3, int(0.5*channels), channels, norm)
+            if self.graph_layers == 1:
+                self.graph_mlp = Seq(
+                                     BasicConv([opt.in_channels,self.graph_feats], None, None, False)
+                                     )
+            elif self.graph_layers >= 2:
+                layers = [BasicConv([opt.in_channels, self.graph_hidden], 'relu', None, True)]
+                for i in range(self.graph_layers-2):
+                    layers.append(BasicConv([opt.graph_hidden, self.graph_hidden], 'relu', None, True))
+                layers.append(torch.nn.Dropout(p=opt.graph_dropout))
+                layers.append(BasicConv([self.graph_hidden,self.graph_feats], None, None, False))
+                self.graph_mlp = Seq(*layers)
+
+            #self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
+            self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
+        else:
+            #self.head = MessagePassing(opt.in_channels, opt.in_channels, int(0.5*channels), channels, norm)
+            self.head = MessagePassing(opt.in_channels, 2*opt.in_channels, int(0.5*channels), channels, norm)
         '''
         elif self.knn_criterion == 'all':
             self.head = MessagePassing(opt.in_channels, opt.in_channels, int(0.5*channels), channels, norm)
@@ -177,31 +184,13 @@ class CustomDenseGCN(torch.nn.Module):
                               for i in range(1,self.n_blocks)])
 
         fusion_dims = int(sum([channels*(i+1) for i in range(self.n_blocks)]))
-        '''
-        self.fusion_block = Seq(
-                                torch.nn.Linear(fusion_dims,1024),
-                                torch.nn.ReLU()
-                                )
-        self.prediction = Seq(
-                              torch.nn.Linear(fusion_dims+1024, 512),
-                              torch.nn.ReLU(),
-                              torch.nn.Linear(512,256),
-                              torch.nn.ReLU(),
-                              torch.nn.Linear(256,opt.n_classes)
-                              )
-        '''
 
-        self.fusion_block = BasicConv([fusion_dims, 64], act, norm, bias)
-        self.prediction = Seq(*[BasicConv([fusion_dims+64, 256], act, norm, bias),
+        self.fusion_block = BasicConv([fusion_dims, 512], act, norm, bias)
+        self.prediction = Seq(*[BasicConv([1024, 256], act, norm, bias),
                                 BasicConv([256, 128], act, norm, bias),
                                 torch.nn.Dropout(p=opt.dropout),
                                 BasicConv([128, opt.n_classes], None, None, bias)])
-        '''
-        self.prediction = Seq(*[BasicConv([self.n_blocks*channels, 512], act, norm, bias),
-                                BasicConv([512, 256], act, norm, bias),
-                                torch.nn.Dropout(p=opt.dropout),
-                                BasicConv([256, opt.n_classes], None, None, bias)])
-        '''
+
 
     def forward(self, inputs, use_mlp_graph = True):
         #remove scaled xyz
@@ -237,8 +226,7 @@ class CustomDenseGCN(torch.nn.Module):
         feats = torch.cat(feats, dim=1)
         fusion = torch.max_pool2d(self.fusion_block(feats), kernel_size=[feats.shape[2], feats.shape[3]])
         fusion = torch.repeat_interleave(fusion, repeats=feats.shape[2], dim=2)
-        return self.prediction(torch.cat((fusion, feats), dim=1)).squeeze(-1)
-        #return self.prediction(feats[-1]).squeeze(-1)
+        return self.prediction(torch.cat((fusion, feats), dim=1)).squeeze(-1), edge_features
 
 class GraphFeatures(torch.nn.Module):
     def __init__(self, input_dims, output_dim):
