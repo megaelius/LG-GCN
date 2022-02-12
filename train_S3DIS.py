@@ -1,6 +1,6 @@
 
 import os
-
+import random
 #os.environ['LD_LIBRARY_PATH'] += ':/usr/local/cuda-11.1/bin64:/usr/local/cuda-11.2/bin64'
 
 import numpy as np
