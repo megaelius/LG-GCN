@@ -161,11 +161,7 @@ class CustomDenseGCN(torch.nn.Module):
                 layers.append(BasicConv([self.graph_hidden,self.graph_feats], None, None, False))
                 self.graph_mlp = Seq(*layers)
 
-            #self.head = MessagePassing(opt.in_channels, self.graph_feats, int(0.5*channels), channels, norm)
-            self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
-        else:
-            #self.head = MessagePassing(opt.in_channels, opt.in_channels, int(0.5*channels), channels, norm)
-            self.head = MessagePassing(opt.in_channels, 2*opt.in_channels, int(0.5*channels), channels, norm)
+        self.head = MessagePassing(opt.in_channels, 2*self.graph_feats, int(0.5*channels), channels, norm)
         '''
         elif self.knn_criterion == 'all':
             self.head = MessagePassing(opt.in_channels, opt.in_channels, int(0.5*channels), channels, norm)
