@@ -219,7 +219,7 @@ def epochs(opt):
             # ------------------ tensorboard log
             wandb_dict = {'Train/loss': train_loss,
                        'Val/loss': test_loss,
-                       'Val/IoU':test_acc,
+                       'Val/IoU':test_iou,
                        'Train/d2d_loss':train_d2d_loss,
                        'Val/d2d_loss':test_d2d_loss,
                        'Train/ce_loss':train_ce_loss,
