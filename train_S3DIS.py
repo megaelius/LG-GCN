@@ -86,7 +86,7 @@ def test(model, loader, criterion, opt, cur_rank):
     model.eval()
     with torch.no_grad():
         for i, data in enumerate(tqdm(loader)):
-            inputs = torch.cat((data.pos.transpose(2, 1).unsqueeze(3), data.x.transpose(2, 1).unsqueeze(3)), 1)
+            inputs = torch.cat((data.pos.transpose(2, 1).unsqueeze(3), data.x.transpose(2, 1).unsqueeze(3)), 1).to(opt.device)
             gt = data.y
 
             out, graph_feats = model(inputs)
