@@ -177,8 +177,8 @@ class CustomDenseGCN(torch.nn.Module):
 
         fusion_dims = int(sum([channels*(i+1) for i in range(self.n_blocks)]))
 
-        self.fusion_block = BasicConv([fusion_dims, 512], act, norm, bias)
-        self.prediction = Seq(*[BasicConv([fusion_dims + 512, 256], act, norm, bias),
+        self.fusion_block = BasicConv([fusion_dims, 256], act, norm, bias)
+        self.prediction = Seq(*[BasicConv([fusion_dims + 256, 256], act, norm, bias),
                                 BasicConv([256, 128], act, norm, bias),
                                 torch.nn.Dropout(p=opt.dropout),
                                 BasicConv([128, opt.n_classes], None, None, bias)])
