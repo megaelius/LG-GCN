@@ -1,0 +1,5 @@
+Name;run;seed;best_epoch;IoU
+baseline;1;0.0;;
+baseline;2;1234.0;;
+baseline;3;2305.0;;
+baseline;mean;;;
